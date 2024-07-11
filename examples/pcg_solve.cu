@@ -3,7 +3,11 @@
 #include "gpu_pcg.cuh"
 #include "gpuassert.cuh"
 #include "read_array.h"
+#include <ctime>
 
+#define tic      double tic_t = clock();
+#define toc      std::cout << (clock() - tic_t)/CLOCKS_PER_SEC \
+                           << " seconds" << std::endl;
 
 int main() {
 
@@ -31,8 +35,20 @@ int main() {
                                    state_size,
                                    knot_points,
                                    &config);
-
     std::cout << "GBD-PCG returned in " << res << " iters." << std::endl;
+    tic
+    int repeat = 1000;
+    for (int i = 0; i < repeat; i++) {
+        uint32_t res = solvePCG<float>(h_S,
+                                       h_Pinv,
+                                       h_gamma,
+                                       h_lambda,
+                                       state_size,
+                                       knot_points,
+                                       &config);
+    }
+    std::cout << "Repeat solvePCG for " << repeat << " times takes ";
+    toc
     float norm = 0;
     for (int i = 0; i < vector_size; i++) {
         norm += h_lambda[i] * h_lambda[i];
