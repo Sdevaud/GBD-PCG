@@ -110,7 +110,13 @@ uint32_t solvePCG(const uint32_t state_size,
 
     void *pcg_kernel = (void *) pcg<T, STATE_SIZE, KNOT_POINTS>;
 
-    // checkPcgOccupancy<T>(pcg_kernel, config->pcg_block, state_size, knot_points);
+    // the following shall be turned off for speed
+    bool gpu_check = checkPcgOccupancy<T>(pcg_kernel, config->pcg_block, state_size, knot_points);
+    // gpu_check shall always be true, o.w. the program exits
+    // gpu_check true means
+    //      1. Device supports Cooperative Threads
+    //      2. Device has enough shared memory for the current state_size & knot_points
+
     void *kernelArgs[] = {
             (void *) &d_S,
             (void *) &d_Pinv,

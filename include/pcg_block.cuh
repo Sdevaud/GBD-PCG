@@ -16,12 +16,10 @@ namespace cgrps = cooperative_groups;
 
 template<typename T>
 size_t pcgBlockSharedMemSize(uint32_t state_size, uint32_t knot_points) {
-    return sizeof(T) * max(
-            (2 * 2 * state_size * state_size + // off-diagonal blocks of S & Pinv
-             2 * state_size + // diagonal blocks of S & Pinv
-             12 * state_size +
-             2 * max(state_size, knot_points)),
-            (9 * state_size * state_size)); // don't get it, but leave it here
+    return sizeof(T) * (2 * 2 * state_size * state_size + // off-diagonal blocks of S & Pinv
+                        2 * state_size + // diagonal blocks of S & Pinv
+                        12 * state_size +
+                        2 * max(state_size, knot_points));
 }
 
 
