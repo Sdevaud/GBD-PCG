@@ -63,4 +63,87 @@ void bdmv_block(T *s_dst, // size = b_dim
     }
 }
 
+// The following shall be moved to MPCGPU include
+// by Shaohui Yang July 16
+template<typename T>
+__device__
+void store_block_db(uint32_t b_dim, uint32_t m_dim, T *src, T *dst, unsigned BLOCKNO, int multiplier = 1,
+                    cooperative_groups::thread_group g = cooperative_groups::this_thread_block()) {
 
+    unsigned block_row_offset, ind;
+    block_row_offset = BLOCKNO * b_dim;
+
+    if (multiplier == 1) {
+        gato_memcpy<T>(
+                dst + block_row_offset,
+                src,
+                b_dim
+        );
+    } else {
+        for (ind = g.thread_rank(); ind < b_dim; ind += g.size()) {
+            dst[block_row_offset + ind] = src[ind] * multiplier;
+        }
+    }
+}
+
+template<typename T>
+__device__
+void load_block_db(uint32_t b_dim, uint32_t m_dim, T *src, T *dst, unsigned brow,
+                   cooperative_groups::thread_group g = cooperative_groups::this_thread_block()) {
+    unsigned block_row_offset;
+    block_row_offset = brow * b_dim;
+
+    gato_memcpy<T>(
+            dst,
+            src + block_row_offset,
+            b_dim
+    );
+}
+
+template<typename T>
+__device__
+void load_block_ob(uint32_t b_dim, uint32_t m_dim, T *src, T *dst, unsigned bcol, unsigned brow, bool transpose = false,
+                   cooperative_groups::thread_group g = cooperative_groups::this_thread_block()) {
+    unsigned block_row_offset, block_col_offset;
+
+    block_row_offset = brow * (2 * b_dim * b_dim);
+    block_col_offset = bcol * b_dim * b_dim;
+
+    if (!transpose) {
+        gato_memcpy<T>(
+                dst,
+                src + block_row_offset + block_col_offset,
+                b_dim * b_dim
+        );
+    } else {
+        unsigned ind, transpose_col, transpose_row;
+        for (ind = threadIdx.x; ind < b_dim * b_dim; ind += blockDim.x) {
+            transpose_col = ind % b_dim * b_dim;
+            transpose_row = ind / b_dim;
+            dst[transpose_col + transpose_row] = src[block_row_offset + block_col_offset + ind];
+        }
+    }
+}
+
+template<typename T>
+__device__
+void store_block_ob(uint32_t b_dim, uint32_t m_dim, T *src, T *dst, unsigned col, unsigned BLOCKNO, int multiplier = 1,
+                    cooperative_groups::thread_group g = cooperative_groups::this_thread_block()) {
+
+    unsigned block_row_offset, block_col_offset, ind;
+
+    block_row_offset = BLOCKNO * (2 * b_dim * b_dim);
+    block_col_offset = col * b_dim * b_dim;
+
+    if (multiplier == 1) {
+        gato_memcpy<T>(
+                dst + block_row_offset + block_col_offset,
+                src,
+                b_dim * b_dim
+        );
+    } else {
+        for (ind = g.thread_rank(); ind < b_dim * b_dim; ind += g.size()) {
+            dst[block_row_offset + block_col_offset + ind] = src[ind] * multiplier;
+        }
+    }
+}
