@@ -18,7 +18,7 @@ template<typename T>
 size_t pcgBlockSharedMemSize(uint32_t state_size, uint32_t knot_points) {
     return sizeof(T) * (2 * 2 * state_size * state_size + // off-diagonal blocks of S & Pinv
                         2 * state_size + // diagonal blocks of S & Pinv
-                        11 * state_size +
+                        7 * state_size +
                         max(state_size, knot_points));
 }
 
@@ -82,25 +82,30 @@ void pcgBlock(
 
     extern __shared__ T s_temp[];
 
-    // this part is different from pcg.cuh because memory length changes
+    // Sdb, Sob, Pinvdb, Pinvob memory cannot be shared within the block
+    // it is preferable to have Sdb & Sob in consecutive mem. Same applies to Pinvdb, Pinvob.
     T *s_Sdb = s_temp;
     T *s_Sob = s_Sdb + state_size;
     T *s_Pinvdb = s_Sob + 2 * states_sq;
     T *s_Pinvob = s_Pinvdb + state_size;
-    //
+    T *s_v_b = s_Pinvob + 2 * states_sq;
 
-    T *s_gamma = s_Pinvob + 2 * states_sq;
-    T *s_scratch = s_gamma + state_size;
-    T *s_lambda = s_scratch;
-    T *s_r_tilde = s_lambda + 3 * state_size;
-    T *s_upsilon = s_r_tilde;       // share nx
-    T *s_v_b = s_upsilon + state_size;
     T *s_eta_new_b = s_v_b;         // share max(N, nx)
-    T *s_r = s_eta_new_b + max(knot_points, state_size);
-    T *s_p = s_r + 3 * state_size;
-    T *s_r_b = s_r + state_size;
-    T *s_p_b = s_p + state_size;
+    T *s_r_tilde = s_eta_new_b + max(knot_points, state_size);
+
+    // A graph shall be included to explain the memory allocation
+    T *s_upsilon = s_r_tilde;       // share nx
+    T *s_lambda = s_upsilon;
+
+    // lambda_{b-1:b+1}, p_{b-1:b+1}, r_{b-1:b+1} all in consecutive mem. Important!!!
+    T *s_end = s_lambda + 7 * state_size;   // access beyond s_end is forbidden
+    T *s_p = s_lambda + 2 * state_size;
+    T *s_r = s_lambda + 4 * state_size;
+
     T *s_lambda_b = s_lambda + state_size;
+    T *s_p_b = s_p + state_size;
+    T *s_r_b = s_r + state_size;
+    T *s_gamma = s_r_b + state_size;
 
     uint32_t iter;
     T alpha, beta, eta, eta_new;
