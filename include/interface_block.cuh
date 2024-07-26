@@ -23,35 +23,38 @@ uint32_t solvePCGBlock(
         printf("This api can only be called with no preconditioner\n");
 
     const uint32_t states_sq = stateSize * stateSize;
+    const uint32_t Nnx_T = stateSize * knotPoints * sizeof(T);
+    const uint32_t Nnx2_T = knotPoints * states_sq * sizeof(T);
+
     /* Create device memory d_Sdb, d_Sob, d_Pinvdb, d_Pinvob
      * d_gamma, d_lambda, d_r, d_p, d_v_temp
 	d_eta_new_temp */
     T *d_Sdb, *d_Sob, *d_gamma, *d_lambda;
-    gpuErrchk(cudaMalloc(&d_lambda, stateSize * knotPoints * sizeof(T)));
-    gpuErrchk(cudaMalloc(&d_Sdb, stateSize * knotPoints * sizeof(T)));
-    gpuErrchk(cudaMalloc(&d_Sob, 2 * states_sq * knotPoints * sizeof(T)));
-    gpuErrchk(cudaMalloc(&d_gamma, stateSize * knotPoints * sizeof(T)));
+    gpuErrchk(cudaMalloc(&d_Sdb, Nnx_T));
+    gpuErrchk(cudaMalloc(&d_Sob, 2 * Nnx2_T));
+    gpuErrchk(cudaMalloc(&d_gamma, Nnx_T));
+    gpuErrchk(cudaMalloc(&d_lambda, Nnx_T));
 
 
     T *d_Pinvdb, *d_Pinvob;
-    gpuErrchk(cudaMalloc(&d_Pinvdb, stateSize * knotPoints * sizeof(T)));
-    gpuErrchk(cudaMalloc(&d_Pinvob, 2 * states_sq * knotPoints * sizeof(T)));
+    gpuErrchk(cudaMalloc(&d_Pinvdb, Nnx_T));
+    gpuErrchk(cudaMalloc(&d_Pinvob, 2 * Nnx2_T));
 
     /*   PCG vars   */
     T *d_r, *d_p, *d_v_temp, *d_eta_new_temp;
-    gpuErrchk(cudaMalloc(&d_r, stateSize * knotPoints * sizeof(T)));
-    gpuErrchk(cudaMalloc(&d_p, stateSize * knotPoints * sizeof(T)));
+    gpuErrchk(cudaMalloc(&d_r, Nnx_T));
+    d_p = d_r;
     gpuErrchk(cudaMalloc(&d_v_temp, knotPoints * sizeof(T)));
-    gpuErrchk(cudaMalloc(&d_eta_new_temp, knotPoints * sizeof(T)));
+    d_eta_new_temp = d_v_temp;
 
 
     /* Copy S, Pinv, gamma, lambda*/
-    gpuErrchk(cudaMemcpy(d_Sdb, h_Sdb, stateSize * knotPoints * sizeof(T), cudaMemcpyHostToDevice));
-    gpuErrchk(cudaMemcpy(d_Sob, h_Sob, 2 * states_sq * knotPoints * sizeof(T), cudaMemcpyHostToDevice));
-    gpuErrchk(cudaMemcpy(d_Pinvdb, h_Pinvdb, stateSize * knotPoints * sizeof(T), cudaMemcpyHostToDevice));
-    gpuErrchk(cudaMemcpy(d_Pinvob, h_Pinvob, 2 * states_sq * knotPoints * sizeof(T), cudaMemcpyHostToDevice));
-    gpuErrchk(cudaMemcpy(d_lambda, h_lambda, stateSize * knotPoints * sizeof(T), cudaMemcpyHostToDevice));
-    gpuErrchk(cudaMemcpy(d_gamma, h_gamma, stateSize * knotPoints * sizeof(T), cudaMemcpyHostToDevice));
+    gpuErrchk(cudaMemcpy(d_Sdb, h_Sdb, Nnx_T, cudaMemcpyHostToDevice));
+    gpuErrchk(cudaMemcpy(d_Sob, h_Sob, 2 * Nnx2_T, cudaMemcpyHostToDevice));
+    gpuErrchk(cudaMemcpy(d_Pinvdb, h_Pinvdb, Nnx_T, cudaMemcpyHostToDevice));
+    gpuErrchk(cudaMemcpy(d_Pinvob, h_Pinvob, 2 * Nnx2_T, cudaMemcpyHostToDevice));
+    gpuErrchk(cudaMemcpy(d_lambda, h_lambda, Nnx_T, cudaMemcpyHostToDevice));
+    gpuErrchk(cudaMemcpy(d_gamma, h_gamma, Nnx_T, cudaMemcpyHostToDevice));
 
 
     uint32_t pcg_iters = solvePCGBlock(stateSize, knotPoints,
@@ -67,10 +70,8 @@ uint32_t solvePCGBlock(
                                        d_eta_new_temp,
                                        config);
 
-
     /* Copy data back */
-    gpuErrchk(cudaMemcpy(h_lambda, d_lambda, stateSize * knotPoints * sizeof(T), cudaMemcpyDeviceToHost));
-    gpuErrchk(cudaMemcpy(h_gamma, d_gamma, stateSize * knotPoints * sizeof(T), cudaMemcpyDeviceToHost));
+    gpuErrchk(cudaMemcpy(h_lambda, d_lambda, Nnx_T, cudaMemcpyDeviceToHost));
 
     cudaFree(d_lambda);
     cudaFree(d_Sdb);
@@ -79,9 +80,7 @@ uint32_t solvePCGBlock(
     cudaFree(d_Pinvdb);
     cudaFree(d_Pinvob);
     cudaFree(d_r);
-    cudaFree(d_p);
     cudaFree(d_v_temp);
-    cudaFree(d_eta_new_temp);
 
     return pcg_iters;
 }

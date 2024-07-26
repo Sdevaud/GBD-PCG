@@ -16,5 +16,5 @@ namespace pcg_constants{
 	template<typename T>
     T DEFAULT_EPSILON = 1e-8;
     dim3 DEFAULT_GRID(128);
-    dim3 DEFAULT_BLOCK(64);
+    dim3 DEFAULT_BLOCK(32);     // should be >= 32 because one warp contains 32 threads
 }

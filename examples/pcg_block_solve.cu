@@ -44,6 +44,12 @@ int main(int argc, char *argv[]) {
                                         knot_points,
                                         &config);
     std::cout << "GBD-PCG-Block returned in " << res << " iters." << std::endl;
+    float norm = 0;
+    for (int i = 0; i < vector_size; i++) {
+        norm += h_lambda[i] * h_lambda[i];
+    }
+    std::cout << "Lambda norm: " << sqrt(norm) << std::endl;
+
     tic
     int repeat = 1000;
     for (int i = 0; i < repeat; i++) {
@@ -59,11 +65,6 @@ int main(int argc, char *argv[]) {
     }
     std::cout << "Repeat solvePCGBlock for " << repeat << " times takes ";
     toc
-    float norm = 0;
-    for (int i = 0; i < vector_size; i++) {
-        norm += h_lambda[i] * h_lambda[i];
-    }
-    std::cout << "Lambda norm: " << sqrt(norm) << std::endl;
 
     return 0;
 }
