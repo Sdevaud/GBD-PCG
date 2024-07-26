@@ -57,16 +57,16 @@ bool checkPcgBlockOccupancy(void *kernel, dim3 block, uint32_t state_size, uint3
 template<typename T, uint32_t state_size, uint32_t knot_points>
 __global__
 void pcgBlock(
-        T *d_Sdb, // diagonal blocks of S, size = stateSize * knotPoints
-        T *d_Sob,  // off-diagonal blocks of S, size = 2* stateSize * stateSize * knotPoints
-        T *d_Pinvdb, // diagonal blocks of Pinv, size = stateSize * knotPoints
-        T *d_Pinvob,  // off-diagonal blocks of Pinv, size = 2* stateSize * stateSize * knotPoints
-        T *d_gamma,  // size = stateSize * knotPoints
-        T *d_lambda, // size = stateSize * knotPoints
-        T *d_r, // size = stateSize * knotPoints
-        T *d_p, // size = stateSize * knotPoints
-        T *d_v_temp,  // size = knotPoints
-        T *d_eta_new_temp, // size = knotPoints
+        T *d_Sdb,           // diagonal blocks of S, size = N * nx
+        T *d_Sob,           // off-diagonal blocks of S, size = 2 * N * nx^2
+        T *d_Pinvdb,        // diagonal blocks of Pinv, size = N * nx
+        T *d_Pinvob,        // off-diagonal blocks of Pinv, size = 2 * N * nx^2
+        T *d_gamma,         // size = N * nx
+        T *d_lambda,        // size = N * nx
+        T *d_r,             // size = N * nx
+        T *d_p,             // size = N * nx
+        T *d_v_temp,        // size = N
+        T *d_eta_new_temp,  // size = N
         uint32_t *d_iters,
         bool *d_max_iter_exit,
         uint32_t max_iter,
@@ -108,7 +108,7 @@ void pcgBlock(
 
     bool max_iter_exit = true;
 
-    // populate shared memory into s_Sob & s_Pinvob
+    // load Sob, Pinvob from GPU global mem to block shared mem
     for (unsigned ind = thread_id; ind < 2 * states_sq; ind += block_dim) {
         if (block_id == 0 && ind < states_sq) { continue; }
         if (block_id == knot_points - 1 && ind >= states_sq) { continue; }
@@ -116,10 +116,10 @@ void pcgBlock(
         s_Sob[ind] = d_Sob[block_id * states_sq * 2 + ind];
         s_Pinvob[ind] = d_Pinvob[block_id * states_sq * 2 + ind];
     }
-    // populate shared memory into s_Sdb & s_Pinvdb
+
+    // load Sdb, Pinvdb, gamma from GPU global mem to block shared mem
     glass::copy<T>(state_size, &d_Sdb[block_x_statesize], s_Sdb);
     glass::copy<T>(state_size, &d_Pinvdb[block_x_statesize], s_Pinvdb);
-
     glass::copy<T>(state_size, &d_gamma[block_x_statesize], s_gamma);
 
     // compute norm of d_gamma (entire gamma), use s_eta_new_b & d_eta_new_temp temporarily
@@ -143,12 +143,15 @@ void pcgBlock(
     for (unsigned ind = thread_id; ind < state_size; ind += block_dim) {
         s_r_b[ind] = s_gamma[ind] - s_r_b[ind];
         d_r[block_x_statesize + ind] = s_r_b[ind];
+        // load s_r_b to middle part of s_r locally.
+        s_r[ind + state_size] = s_r_b[ind];
     }
 
     grid.sync(); //-------------------------------------
 
     // r_tilde = Pinv * r
-    loadbdVec<T, state_size, knot_points - 1>(s_r, block_id, &d_r[block_x_statesize]);
+    // load first and last part of s_r from d_r (global memory).
+    loadbdVecOther<T, state_size, knot_points - 1>(s_r, block_id, &d_r[block_x_statesize]);
     __syncthreads();
     bdmv_block<T>(s_r_tilde, s_Pinvdb, s_Pinvob, s_r, state_size, knot_points - 1, block_id);
     __syncthreads();
@@ -157,6 +160,8 @@ void pcgBlock(
     for (unsigned ind = thread_id; ind < state_size; ind += block_dim) {
         s_p_b[ind] = s_r_tilde[ind];
         d_p[block_x_statesize + ind] = s_p_b[ind];
+        // load s_p_b to middle part of s_p locally.
+        s_p[ind + state_size] = s_p_b[ind];
     }
 
 
@@ -174,7 +179,8 @@ void pcgBlock(
     for (iter = 0; iter < max_iter; iter++) {
 
         // upsilon = S * p
-        loadbdVec<T, state_size, knot_points - 1>(s_p, block_id, &d_p[block_x_statesize]);
+        // load first and last part of s_p from d_p (global memory).
+        loadbdVecOther<T, state_size, knot_points - 1>(s_p, block_id, &d_p[block_x_statesize]);
         __syncthreads();
         bdmv_block<T>(s_upsilon, s_Sdb, s_Sob, s_p, state_size, knot_points - 1, block_id);
         __syncthreads();
@@ -193,12 +199,15 @@ void pcgBlock(
             s_lambda_b[ind] += alpha * s_p_b[ind];
             s_r_b[ind] -= alpha * s_upsilon[ind];
             d_r[block_x_statesize + ind] = s_r_b[ind];
+            // load s_r_b to middle part of s_r locally.
+            s_r[ind + state_size] = s_r_b[ind];
         }
 
         grid.sync(); //-------------------------------------
 
         // r_tilde = Pinv * r
-        loadbdVec<T, state_size, knot_points - 1>(s_r, block_id, &d_r[block_x_statesize]);
+        // load first and last part of s_r from d_r (global memory).
+        loadbdVecOther<T, state_size, knot_points - 1>(s_r, block_id, &d_r[block_x_statesize]);
         __syncthreads();
         bdmv_block<T>(s_r_tilde, s_Pinvdb, s_Pinvob, s_r, state_size, knot_points - 1, block_id);
         __syncthreads();
@@ -236,6 +245,8 @@ void pcgBlock(
         for (uint32_t ind = thread_id; ind < state_size; ind += block_dim) {
             s_p_b[ind] = s_r_tilde[ind] + beta * s_p_b[ind];
             d_p[block_x_statesize + ind] = s_p_b[ind];
+            // load s_p_b to middle part of s_p locally.
+            s_p[ind + state_size] = s_p_b[ind];
         }
         grid.sync(); //-------------------------------------
     }
