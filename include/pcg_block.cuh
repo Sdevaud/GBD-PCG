@@ -18,8 +18,8 @@ template<typename T>
 size_t pcgBlockSharedMemSize(uint32_t state_size, uint32_t knot_points) {
     return sizeof(T) * (2 * 2 * state_size * state_size + // off-diagonal blocks of S & Pinv
                         2 * state_size + // diagonal blocks of S & Pinv
-                        12 * state_size +
-                        2 * max(state_size, knot_points));
+                        11 * state_size +
+                        max(state_size, knot_points));
 }
 
 
@@ -93,9 +93,9 @@ void pcgBlock(
     T *s_scratch = s_gamma + state_size;
     T *s_lambda = s_scratch;
     T *s_r_tilde = s_lambda + 3 * state_size;
-    T *s_upsilon = s_r_tilde + state_size;
+    T *s_upsilon = s_r_tilde;       // share nx
     T *s_v_b = s_upsilon + state_size;
-    T *s_eta_new_b = s_v_b + max(knot_points, state_size);
+    T *s_eta_new_b = s_v_b;         // share max(N, nx)
     T *s_r = s_eta_new_b + max(knot_points, state_size);
     T *s_p = s_r + 3 * state_size;
     T *s_r_b = s_r + state_size;
