@@ -94,6 +94,7 @@ void pcg(
 
     uint32_t iter;
     T alpha, beta, eta, eta_new;
+    T gamma_norm, r_norm;
 
     bool max_iter_exit = true;
 
@@ -107,6 +108,14 @@ void pcg(
     }
     glass::copy<T>(state_size, &d_gamma[block_x_statesize], s_gamma);
 
+    // compute norm of d_gamma (entire gamma), use s_eta_new_b & d_eta_new_temp temporarily
+    __syncthreads();
+    glass::dot<T, state_size>(s_eta_new_b, s_gamma, s_gamma);
+    if (thread_id == 0) { d_eta_new_temp[block_id] = s_eta_new_b[0]; }
+    grid.sync(); //-------------------------------------
+    glass::reduce<T>(s_eta_new_b, knot_points, d_eta_new_temp);
+    __syncthreads();
+    gamma_norm = pow(s_eta_new_b[0], 0.5);
 
     //
     // PCG
@@ -189,7 +198,16 @@ void pcg(
         __syncthreads();
         eta_new = s_eta_new_b[0];
 
-        if (abs(eta_new) < exit_tol) {
+        // compute norm of r
+        glass::dot<T, state_size>(s_eta_new_b, s_r_b, s_r_b);
+        __syncthreads();
+        if (thread_id == 0) { d_eta_new_temp[block_id] = s_eta_new_b[0]; }
+        grid.sync(); //-------------------------------------
+        glass::reduce<T>(s_eta_new_b, knot_points, d_eta_new_temp);
+        __syncthreads();
+        r_norm = pow(s_eta_new_b[0], 0.5);
+
+        if (r_norm / gamma_norm < exit_tol) {
             iter++;
             max_iter_exit = false;
             break;
