@@ -15,18 +15,29 @@
 namespace cgrps = cooperative_groups;
 
 template<typename T>
-size_t pcgBlockSharedMemSize(uint32_t state_size, uint32_t knot_points) {
-    return sizeof(T) * (2 * 2 * state_size * state_size + // off-diagonal blocks of S & Pinv
-                        2 * state_size + // diagonal blocks of S & Pinv
-                        7 * state_size +
-                        max(state_size, knot_points));
+size_t pcgBlockSharedMemSize(uint32_t state_size, uint32_t knot_points, bool pcg_poly_order) {
+    if (pcg_poly_order) {
+        // poly_order = 1, use H
+        return sizeof(T) * (2 * 2 * state_size * state_size + // off-diagonal blocks of S & Pinv
+                            3 * state_size * state_size + // H size
+                            2 * state_size + // diagonal blocks of S & Pinv
+                            10 * state_size + // TODO: to be modified due to inclusion of H
+                            max(state_size, knot_points));
+    } else {
+        // poly_order = 0, don't use H
+        return sizeof(T) * (2 * 2 * state_size * state_size + // off-diagonal blocks of S & Pinv
+                            2 * state_size + // diagonal blocks of S & Pinv
+                            7 * state_size +
+                            max(state_size, knot_points));
+    }
+
 }
 
 
 template<typename T>
-bool checkPcgBlockOccupancy(void *kernel, dim3 block, uint32_t state_size, uint32_t knot_points) {
+bool checkPcgBlockOccupancy(void *kernel, dim3 block, uint32_t state_size, uint32_t knot_points, bool poly_order) {
 
-    const uint32_t smem_size = pcgBlockSharedMemSize<T>(state_size, knot_points);
+    const uint32_t smem_size = pcgBlockSharedMemSize<T>(state_size, knot_points, poly_order);
     int dev = 0;
 
     cudaDeviceProp deviceProp;
@@ -54,13 +65,14 @@ bool checkPcgBlockOccupancy(void *kernel, dim3 block, uint32_t state_size, uint3
 }
 
 
-template<typename T, uint32_t state_size, uint32_t knot_points>
+template<typename T, uint32_t state_size, uint32_t knot_points, bool poly_order>
 __global__
 void pcgBlock(
         T *d_Sdb,           // diagonal blocks of S, size = N * nx
         T *d_Sob,           // off-diagonal blocks of S, size = 2 * N * nx^2
         T *d_Pinvdb,        // diagonal blocks of Pinv, size = N * nx
         T *d_Pinvob,        // off-diagonal blocks of Pinv, size = 2 * N * nx^2
+        T *d_H,             // blocks of H (extra precond), size = 3 * N * nx^2, only if poly_order = true
         T *d_gamma,         // size = N * nx
         T *d_lambda,        // size = N * nx
         T *d_r,             // size = N * nx
@@ -88,7 +100,13 @@ void pcgBlock(
     T *s_Sob = s_Sdb + state_size;
     T *s_Pinvdb = s_Sob + 2 * states_sq;
     T *s_Pinvob = s_Pinvdb + state_size;
-    T *s_v_b = s_Pinvob + 2 * states_sq;
+    T *s_H, *s_v_b;
+    if (poly_order) {
+        s_H = s_Pinvob + 2 * states_sq;
+        s_v_b = s_H + 3 * states_sq;        // H size = 3nx^2, if needed
+    } else {
+        s_v_b = s_Pinvob + 2 * states_sq;
+    }
 
     T *s_eta_new_b = s_v_b;         // share max(N, nx)
     T *s_r_tilde = s_eta_new_b + max(knot_points, state_size);
@@ -98,7 +116,12 @@ void pcgBlock(
     T *s_lambda = s_upsilon;
 
     // lambda_{b-1:b+1}, p_{b-1:b+1}, r_{b-1:b+1} all in consecutive mem. Important!!!
-    T *s_end = s_lambda + 7 * state_size;   // access beyond s_end is forbidden
+    T *s_end;           // access beyond s_end is forbidden
+    if (poly_order) {
+        s_end = s_lambda + 10 * state_size;
+    } else {
+        s_end = s_lambda + 7 * state_size;
+    }
     T *s_p = s_lambda + 2 * state_size;
     T *s_r = s_lambda + 4 * state_size;
 
@@ -106,6 +129,12 @@ void pcgBlock(
     T *s_p_b = s_p + state_size;
     T *s_r_b = s_r + state_size;
     T *s_gamma = s_r_b + state_size;
+
+    T *s_r_extra, *s_r_extra_b;
+    if (poly_order) {
+        s_r_extra = s_lambda + 7 * state_size;
+        s_r_extra_b = s_r_extra + state_size;
+    }
 
     uint32_t iter;
     T alpha, beta, eta, eta_new;
@@ -126,6 +155,16 @@ void pcgBlock(
     glass::copy<T>(state_size, &d_Sdb[block_x_statesize], s_Sdb);
     glass::copy<T>(state_size, &d_Pinvdb[block_x_statesize], s_Pinvdb);
     glass::copy<T>(state_size, &d_gamma[block_x_statesize], s_gamma);
+
+    if (poly_order) {
+        // load H from GPU global mem to block shared mem
+        for (unsigned ind = thread_id; ind < 3 * states_sq; ind += block_dim) {
+            if ((block_id == 0 || block_id == 1) && ind < states_sq) { continue; }
+            if ((block_id == knot_points - 1 || block_id == knot_points - 2) && ind >= 2 * states_sq) { continue; }
+
+            s_H[ind] = d_H[block_id * states_sq * 3 + ind];
+        }
+    }
 
     // compute norm of d_gamma (entire gamma), use s_eta_new_b & d_eta_new_temp temporarily
     __syncthreads();
@@ -160,6 +199,23 @@ void pcgBlock(
     __syncthreads();
     bdmv_block<T>(s_r_tilde, s_Pinvdb, s_Pinvob, s_r, state_size, knot_points - 1, block_id);
     __syncthreads();
+
+    if (poly_order) {
+        for (uint32_t ind = thread_id; ind < state_size; ind += block_dim) {
+            // save s_r_tilde to d_r globally
+            d_r[block_x_statesize + ind] = s_r_tilde[ind];
+            // load s_r_tilde to middle part of s_r_extra locally.
+            s_r_extra[ind + state_size] = s_r_tilde[ind];
+        }
+        grid.sync(); //-------------------------------------
+
+        // r_extra = H * r_tilde
+        // load first and last part of s_r_extra from d_r (global memory).
+        loadbdVecOther2<T, state_size, knot_points - 1>(s_r_extra, block_id, &d_r[block_x_statesize]);
+        __syncthreads();
+        bdmv<T>(s_r_tilde, s_H, s_r_extra, state_size, knot_points - 1, block_id);
+        __syncthreads();
+    }
 
     // p = r_tilde
     for (unsigned ind = thread_id; ind < state_size; ind += block_dim) {
@@ -216,6 +272,23 @@ void pcgBlock(
         __syncthreads();
         bdmv_block<T>(s_r_tilde, s_Pinvdb, s_Pinvob, s_r, state_size, knot_points - 1, block_id);
         __syncthreads();
+
+        if (poly_order) {
+            for (uint32_t ind = thread_id; ind < state_size; ind += block_dim) {
+                // save s_r_tilde to d_r globally
+                d_r[block_x_statesize + ind] = s_r_tilde[ind];
+                // load s_r_tilde to middle part of s_r_extra locally.
+                s_r_extra[ind + state_size] = s_r_tilde[ind];
+            }
+            grid.sync(); //-------------------------------------
+
+            // r_extra = H * r_tilde
+            // load first and last part of s_r_extra from d_r (global memory).
+            loadbdVecOther2<T, state_size, knot_points - 1>(s_r_extra, block_id, &d_r[block_x_statesize]);
+            __syncthreads();
+            bdmv<T>(s_r_tilde, s_H, s_r_extra, state_size, knot_points - 1, block_id);
+            __syncthreads();
+        }
 
         // eta = r * r_tilde
         glass::dot<T, state_size>(s_eta_new_b, s_r_b, s_r_tilde);

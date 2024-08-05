@@ -10,6 +10,9 @@
 #define KNOT_POINTS  3
 #endif
 
+#ifndef PRECOND_POLY_ORDER
+#define PRECOND_POLY_ORDER  true  // false -> poly order = 0, true -> poly order = 1
+#endif
 
 namespace pcg_constants{
     uint32_t DEFAULT_MAX_PCG_ITER = 1000;

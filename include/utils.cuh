@@ -67,6 +67,29 @@ void loadbdVecOther(T *s_var,
 
 }
 
+template<typename T, uint32_t block_dim, uint32_t max_block_id>
+__device__
+void loadbdVecOther2(T *s_var,
+                     const uint32_t block_id,
+                     T *d_var_b) {
+
+    if (block_id == 0 || block_id == 1) {
+        for (unsigned ind = threadIdx.x; ind < block_dim; ind += blockDim.x) {
+            s_var[ind + 2 * block_dim] = *(d_var_b + 2 * block_dim + ind);
+        }
+    } else if (block_id == max_block_id || block_id == max_block_id - 1) {
+        for (unsigned ind = threadIdx.x; ind < block_dim; ind += blockDim.x) {
+            s_var[ind] = *(d_var_b - 2 * block_dim + ind);
+        }
+    } else {
+        for (unsigned ind = threadIdx.x; ind < block_dim; ind += blockDim.x) {
+            s_var[ind + 2 * block_dim] = *(d_var_b + 2 * block_dim + ind);
+            s_var[ind] = *(d_var_b - 2 * block_dim + ind);
+        }
+    }
+
+}
+
 // 
 // block-diagonal matrix-vector product
 // 

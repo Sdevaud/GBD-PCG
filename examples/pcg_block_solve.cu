@@ -34,10 +34,15 @@ int main(int argc, char *argv[]) {
     }
 
     struct pcg_config<float> config;
+    const int matrixH_size = 3 * knot_points * state_size * state_size;
+    float h_H[matrixH_size];
+    readArrayFromFile(matrixH_size, "data/I_H_tilde.txt", h_H);
+
     uint32_t res = solvePCGBlock<float>(h_Sdb,
                                         h_Sob,
                                         h_Pinvdb,
                                         h_Pinvob,
+                                        h_H,
                                         h_gamma,
                                         h_lambda,
                                         state_size,
@@ -50,21 +55,21 @@ int main(int argc, char *argv[]) {
     }
     std::cout << "Lambda norm: " << sqrt(norm) << std::endl;
 
-    tic
-    int repeat = 1000;
-    for (int i = 0; i < repeat; i++) {
-        uint32_t res = solvePCGBlock<float>(h_Sdb,
-                                            h_Sob,
-                                            h_Pinvdb,
-                                            h_Pinvob,
-                                            h_gamma,
-                                            h_lambda,
-                                            state_size,
-                                            knot_points,
-                                            &config);
-    }
-    std::cout << "Repeat solvePCGBlock for " << repeat << " times takes ";
-    toc
+//    tic
+//    int repeat = 1000;
+//    for (int i = 0; i < repeat; i++) {
+//        uint32_t res = solvePCGBlock<float>(h_Sdb,
+//                                            h_Sob,
+//                                            h_Pinvdb,
+//                                            h_Pinvob,
+//                                            h_gamma,
+//                                            h_lambda,
+//                                            state_size,
+//                                            knot_points,
+//                                            &config);
+//    }
+//    std::cout << "Repeat solvePCGBlock for " << repeat << " times takes ";
+//    toc
 
     return 0;
 }

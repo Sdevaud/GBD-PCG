@@ -13,8 +13,8 @@
 clc
 close all
 digits(16)
-N = 100;
-nx = 15;
+N = 20;
+nx = 20;
 nu = 1;
 
 % generate a set of random {A_k, B_k}
@@ -38,12 +38,16 @@ Q{N} = T*diag(rand(nx,1))*T';
 
 % compute S using {A_k, B_k, Q_k, R_k}
 [D, O, S] = formKKTSchur(A, B, Q, R, N);
-[D_P, O_P, P] = formPreconditionerSS(D, O, N, nx);
+[D_P, O_P, P_p0s3] = formPreconditionerSS(D, O, N, nx);
+alpha = 1;
+[D_H, O_up2, O_down2, I_H3, P_p1s3] = formPolyPreconditioner(D, O, N, nx, alpha);
+
 if ~exist('data', 'dir')
    mkdir('data')
 end
-writeMatrixToFile(D, O, N, nx, './data/S.txt');
-writeMatrixToFile(D_P, O_P, N, nx, './data/P.txt');
+writeBlkTriDiagSymMatrixToFile(D, O, N, nx, './data/S.txt');
+writeBlkTriDiagSymMatrixToFile(D_P, O_P, N, nx, './data/P.txt');
+writeBlkPentaDiagMatrixToFile(D_H, O_up2, O_down2, N, nx, './data/I_H.txt')
 
 % compute S using {\tilde{A}_k, \tilde{B}_k, \tilde{Q}_k, R_k}
 % \tilde{A}_k = T_k * A_k * inv(T_{k-1})
@@ -51,9 +55,12 @@ writeMatrixToFile(D_P, O_P, N, nx, './data/P.txt');
 % \tilde{Q}_k = inv(T_k') * Q_k * inv(T_k)
 % R_k remains the same
 [D_tilde, O_tilde, S_tilde, T] = preprocessS(D, O, N, nx);
-[D_P_tilde, O_P_tilde, P_tilde] = formPreconditionerSS(D_tilde, O_tilde, N, nx);
+[D_P_tilde, O_P_tilde, P_p0s3_tilde] = formPreconditionerSS(D_tilde, O_tilde, N, nx);
+[D_H_tilde, O_up2_tilde, O_down2_tilde, I_H3_tilde ,P_p1s3_tilde] = formPolyPreconditioner(D_tilde, O_tilde, N, nx, alpha);
+
 writeMatrixToFileDiagonal(D_tilde, O_tilde, N, nx, './data/S');
 writeMatrixToFileDiagonal(D_P_tilde, O_P_tilde, N, nx, './data/P');
+writeBlkPentaDiagMatrixToFile(D_H_tilde, O_up2_tilde, O_down2_tilde, N, nx, './data/I_H_tilde.txt')
 
 % generate random \gamma as RHS
 gamma = rand(N*nx, 1);
@@ -63,7 +70,8 @@ writematrix(gamma, './data/gamma.txt');
 % lambda = S \ gamma;
 pcg_max_iter = 1000;
 tic
-[lambda, I]= PCG(P, S, gamma, zeros(N*nx,1), 1e-8, pcg_max_iter);
+[lambda_p0s3, I_p0s3]= PCG(P_p0s3, eye(N*nx), S, gamma, zeros(N*nx,1), 1e-8, pcg_max_iter);
+[lambda_p1s3, I_p1s3]= PCG(P_p0s3, I_H3, S, gamma, zeros(N*nx,1), 1e-8, pcg_max_iter);
 toc
 
 % prepare \tilde{\gamma} = T * \gamma
@@ -76,25 +84,30 @@ writematrix(gamma_tilde, './data/gamma_tilde.txt');
 % solve \tilde{S} * \tilde{\lambda} = \tilde{\gamma}
 % lambda_tilde = S_tilde \ gamma_tilde;
 tic
-[lambda_tilde, I_tilde]= PCG(P_tilde, S_tilde, gamma_tilde, zeros(N*nx,1), 1e-8, pcg_max_iter);
+[lambda_p0s3_tilde, I_p0s3_tilde]= PCG(P_p0s3_tilde, eye(N*nx), S_tilde, gamma_tilde, zeros(N*nx,1), 1e-8, pcg_max_iter);
+[lambda_p1s3_tilde, I_p1s3_tilde]= PCG(P_p0s3_tilde, I_H3_tilde, S_tilde, gamma_tilde, zeros(N*nx,1), 1e-8, pcg_max_iter);
 toc
 
 % get back \lambda = T' * \tilde{\lambda}
 lambda_new = zeros(N*nx, 1);
 for i=1:N
-    lambda_new(1+(i-1)*nx:i*nx,1) = T{i}'*lambda_tilde(1+(i-1)*nx:i*nx,1);
+    lambda_new(1+(i-1)*nx:i*nx,1) = T{i}'*lambda_p1s3_tilde(1+(i-1)*nx:i*nx,1);
 end
 
-disp(['norm of lambda = ', num2str(norm(lambda))])
-disp(['norm of lambda_tilde = ', num2str(norm(lambda_tilde))])
+disp(['norm of lambda p0s3 = ', num2str(norm(lambda_p0s3))])
+disp(['norm of lambda p1s3 = ', num2str(norm(lambda_p1s3))])
+disp(['norm of lambda_tilde p0s3 = ', num2str(norm(lambda_p0s3_tilde))])
+disp(['norm of lambda_tilde p1s3 = ', num2str(norm(lambda_p1s3_tilde))])
 
 % check two lambda are equal 
-disp(['norm of lambda - lambda_new = ', num2str(norm(lambda_new - lambda))])
+disp(['norm of lambda - lambda_new = ', num2str(norm(lambda_new - lambda_p1s3))])
 
 % check condition numbers 
-disp(['cond(P*S) = ', num2str(cond(P*S)), ', cond(P_tilde*S_tilde) = ', num2str(cond(P_tilde*S_tilde))])
+disp(['cond(P*S) p0s3 = ', num2str(cond(P_p0s3*S)), ', cond(P_tilde*S_tilde) p0s3 = ', num2str(cond(P_p0s3_tilde*S_tilde))])
+disp(['cond(P*S) p1s3 = ', num2str(cond(P_p1s3*S)), ', cond(P_tilde*S_tilde) p1s3 = ', num2str(cond(P_p1s3_tilde*S_tilde))])
 
-disp(['PCG iterations for P*S = ', num2str(I), ', for P_tilde*S_tilde = ', num2str(I_tilde)])
+disp(['PCG iterations for P*S p0s3 = ', num2str(I_p0s3), ', for P_tilde*S_tilde p0s3 = ', num2str(I_p0s3_tilde)])
+disp(['PCG iterations for P*S p1s3 = ', num2str(I_p1s3), ', for P_tilde*S_tilde p1s3 = ', num2str(I_p1s3_tilde)])
 
 function writeMatrixToFileDiagonal(D, O, N, nx, matrixname)
     % (D, O) forms a block tridiagonal matrix
@@ -124,7 +137,36 @@ function writeMatrixToFileDiagonal(D, O, N, nx, matrixname)
     writematrix(ob, filenameob);
 end
 
-function writeMatrixToFile(D, O, N, nx, filename)
+function writeBlkPentaDiagMatrixToFile(D, O_up2, O_down2, N, nx, filename)
+    % (D, O_up1, O_down1, O_up2, O_down2) forms a block pengta-diagonal matrix
+    % O_up1 and O_down1 are all zeros, so the result appears like a block
+    % tridiagonal matrix 
+    % each block is of size nx
+    % size of D = N
+    % size of O_up2, O_down2 = N-2
+    out = zeros(N*3, nx*nx);
+    %  out(1, :) = 0
+    out(2, :) = D{1}(:);
+    out(3, :) = O_up2{1}(:);
+    %  out(4, :) = 0
+    out(5, :) = D{2}(:);
+    out(6, :) = O_up2{2}(:);
+    for i=3:N-2
+        offset = (i-1)*3;
+        out(offset+1, :) = O_down2{i-2}(:);
+        out(offset+2, :) = D{i}(:);
+        out(offset+3, :) = O_up2{i}(:);
+    end
+    out(end-5, :) = O_down2{N-3}(:);
+    out(end-4, :) = D{N-1}(:);
+    %  out(end-3, :) = 0
+    out(end-2, :) = O_down2{N-2}(:);
+    out(end-1, :) = D{N}(:);
+    %  out(end, :) = 0
+    writematrix(out, filename);
+end
+
+function writeBlkTriDiagSymMatrixToFile(D, O, N, nx, filename)
     % (D, O) forms a block tridiagonal matrix
     % each block is of size nx
     out = zeros(N*3, nx*nx);
@@ -138,8 +180,8 @@ function writeMatrixToFile(D, O, N, nx, filename)
         out(offset+3, :) = O{i}(:);
     end
     tmp = O{N-1}';
-    out(end-1, :) = D{N}(:);
     out(end-2, :) = tmp(:);
+    out(end-1, :) = D{N}(:);
     writematrix(out, filename);
 end
 
@@ -187,6 +229,30 @@ function [D, O, S] = formKKTSchur(A, B, Q, R, N)
     S = composeBlockDiagonalMatrix(D, O, N, nx);
 end
 
+function [D_H, O_up2, O_down2, I_H, P] = formPolyPreconditioner(D, O, N, nx, alpha)
+    % this is for split = 3
+    % split = 3 -> left & right stair splitting + diagonal splitting
+    O_up1 = cell(1, N-1);
+    O_down1 = cell(1, N-1);
+    for i=1:N-1
+        O_up1{i} = zeros(nx);
+        O_down1{i} = zeros(nx);
+    end
+    O_up2 = cell(1, N-2);
+    O_down2 = cell(1, N-2);
+    D_H = cell(1, N);
+    D_H{1} = alpha*(inv(D{1}) * O{1} * inv(D{2}) * O{1}') + eye(nx);
+    D_H{N} = alpha*(inv(D{N}) * O{N-1}' * inv(D{N-1}) * O{N-1}) + eye(nx);
+    for i=2:N-1
+        D_H{i} = alpha*(inv(D{i}) * O{i} * inv(D{i+1}) * O{i}' + inv(D{i}) * O{i-1}' * inv(D{i-1}) * O{i-1}) + eye(nx);
+        O_up2{i-1} = alpha*(inv(D{i-1}) * O{i-1} * inv(D{i}) * O{i});
+        O_down2{i-1} = alpha*(inv(D{i+1}) * O{i}' * inv(D{i}) * O{i-1}');
+    end
+    I_H = composeBlockPentDiagMatrix(D_H, O_up1, O_up2, O_down1, O_down2, N, nx);
+    [~, ~, add] = formPreconditionerSS(D, O, N, nx);
+    P = I_H * add;
+end
+
 function [D_P, O_P, P] = formPreconditionerSS(D, O, N, nx)
     D_P = cell(1, N);
     O_P = cell(1, N-1); 
@@ -209,10 +275,26 @@ function out = composeBlockDiagonalMatrix(D, O, N, nx)
     out(end-nx+1:end, end-2*nx+1:end) = [O{N-1}', D{N}];
 end
 
-function [lambda, i] = PCG(Pinv, S, gamma, lambda_0, tol, max_iter)
+function out = composeBlockPentDiagMatrix(D, O_up1, O_up2, O_down1, O_down2, N, nx)
+    % need N >= 4
+    % D length = N
+    % O_up1, O_down1 = N - 1
+    % O_up2, O_down2 = N - 2
+    out = zeros(N*nx);
+    out(1:nx, 1:3*nx) = [D{1}, O_up1{1}, O_up2{1}];
+    out(1+nx:2*nx, 1:4*nx) = [O_down1{1}, D{2}, O_up1{2}, O_up2{2}];
+    for i=3:N-2
+        out((i-1)*nx+1:i*nx, (i-3)*nx+1:(i+2)*nx) = [O_down2{i-2}, O_down1{i-1}, D{i}, O_up1{i}, O_up2{i}];
+    end
+    out((N-2)*nx+1:(N-1)*nx, (N-4)*nx+1:end) = [O_down2{N-3}, O_down1{N-2}, D{N-1}, O_up1{N-1}];
+    out((N-1)*nx+1:end, (N-3)*nx+1:end) = [O_down2{N-2}, O_down1{N-1}, D{N}];
+end
+
+function [lambda, i] = PCG(Pinv1, Pinv2, S, gamma, lambda_0, tol, max_iter)
     lambda = lambda_0;
     r = gamma - S*lambda;
-    p = Pinv*r;
+    p = Pinv1*r;
+    p = Pinv2*p;
     r_tilde = p;
     nu = r'*r_tilde;
     for i=1:max_iter
@@ -220,7 +302,8 @@ function [lambda, i] = PCG(Pinv, S, gamma, lambda_0, tol, max_iter)
        alpha = nu / (p'*tmp);
        r = r - alpha*tmp;
        lambda = lambda + alpha*p;
-       r_tilde = Pinv*r;
+       r_tilde = Pinv1*r;
+       r_tilde = Pinv2*r_tilde;
        nu_prime = r'*r_tilde;
        if abs(nu_prime)<tol
           break

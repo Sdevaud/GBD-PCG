@@ -14,6 +14,7 @@ uint32_t solvePCGBlock(
         T *h_Sob,
         T *h_Pinvdb,
         T *h_Pinvob,
+        T *h_H,
         T *h_gamma,
         T *h_lambda,
         unsigned stateSize,
@@ -40,6 +41,11 @@ uint32_t solvePCGBlock(
     gpuErrchk(cudaMalloc(&d_Pinvdb, Nnx_T));
     gpuErrchk(cudaMalloc(&d_Pinvob, 2 * Nnx2_T));
 
+    T *d_H;
+    if (PRECOND_POLY_ORDER) {
+        gpuErrchk(cudaMalloc(&d_H, 3 * Nnx2_T));
+    }
+
     /*   PCG vars   */
     T *d_r, *d_p, *d_v_temp, *d_eta_new_temp;
     gpuErrchk(cudaMalloc(&d_r, Nnx_T));
@@ -53,6 +59,9 @@ uint32_t solvePCGBlock(
     gpuErrchk(cudaMemcpy(d_Sob, h_Sob, 2 * Nnx2_T, cudaMemcpyHostToDevice));
     gpuErrchk(cudaMemcpy(d_Pinvdb, h_Pinvdb, Nnx_T, cudaMemcpyHostToDevice));
     gpuErrchk(cudaMemcpy(d_Pinvob, h_Pinvob, 2 * Nnx2_T, cudaMemcpyHostToDevice));
+    if (PRECOND_POLY_ORDER) {
+        gpuErrchk(cudaMemcpy(d_H, h_H, 3 * Nnx2_T, cudaMemcpyHostToDevice));
+    }
     gpuErrchk(cudaMemcpy(d_lambda, h_lambda, Nnx_T, cudaMemcpyHostToDevice));
     gpuErrchk(cudaMemcpy(d_gamma, h_gamma, Nnx_T, cudaMemcpyHostToDevice));
 
@@ -62,6 +71,7 @@ uint32_t solvePCGBlock(
                                        d_Sob,
                                        d_Pinvdb,
                                        d_Pinvob,
+                                       d_H,
                                        d_gamma,
                                        d_lambda,
                                        d_r,
@@ -79,6 +89,9 @@ uint32_t solvePCGBlock(
     cudaFree(d_gamma);
     cudaFree(d_Pinvdb);
     cudaFree(d_Pinvob);
+    if (PRECOND_POLY_ORDER) {
+        cudaFree(d_H);
+    }
     cudaFree(d_r);
     cudaFree(d_v_temp);
 
@@ -93,6 +106,7 @@ uint32_t solvePCGBlock(const uint32_t state_size,
                        T *d_Sob,
                        T *d_Pinvdb,
                        T *d_Pinvob,
+                       T *d_H,
                        T *d_gamma,
                        T *d_lambda,
                        T *d_r,
@@ -105,10 +119,11 @@ uint32_t solvePCGBlock(const uint32_t state_size,
     bool *d_pcg_exit;
     gpuErrchk(cudaMalloc(&d_pcg_exit, sizeof(bool)));
 
-    void *pcg_kernel = (void *) pcgBlock<T, STATE_SIZE, KNOT_POINTS>;
+    void *pcg_kernel = (void *) pcgBlock<T, STATE_SIZE, KNOT_POINTS, PRECOND_POLY_ORDER>;
 
     // the following shall be turned off for speed
-    bool gpu_check = checkPcgBlockOccupancy<T>(pcg_kernel, config->pcg_block, state_size, knot_points);
+    bool gpu_check = checkPcgBlockOccupancy<T>(pcg_kernel, config->pcg_block, state_size, knot_points,
+                                               PRECOND_POLY_ORDER);
     // gpu_check shall always be true, o.w. the program exits
     // gpu_check true means
     //      1. Device supports Cooperative Threads
@@ -119,6 +134,7 @@ uint32_t solvePCGBlock(const uint32_t state_size,
             (void *) &d_Sob,
             (void *) &d_Pinvdb,
             (void *) &d_Pinvob,
+            (void *) &d_H,
             (void *) &d_gamma,
             (void *) &d_lambda,
             (void *) &d_r,
@@ -133,7 +149,7 @@ uint32_t solvePCGBlock(const uint32_t state_size,
     };
     uint32_t h_pcg_iters;
 
-    size_t ppcg_kernel_smem_size = pcgBlockSharedMemSize<T>(state_size, knot_points);
+    size_t ppcg_kernel_smem_size = pcgBlockSharedMemSize<T>(state_size, knot_points, PRECOND_POLY_ORDER);
 
     gpuErrchk(cudaLaunchCooperativeKernel(pcg_kernel, knot_points, pcg_constants::DEFAULT_BLOCK, kernelArgs,
                                           ppcg_kernel_smem_size));
