@@ -40,11 +40,15 @@ int main() {
     for (int i = 0; i < vector_size; i++) {
         norm += h_lambda[i] * h_lambda[i];
     }
-    std::cout << "Lambda norm: " << sqrt(norm) << std::endl;
+    printf("Lambda norm: %f, pcg iter = %d\n", sqrt(norm), res);
 
     tic
     int repeat = 1000;
     for (int i = 0; i < repeat; i++) {
+        for (int i = 0; i < vector_size; i++) {
+            h_lambda[i] = 0;
+        }
+
         uint32_t res = solvePCG<float>(h_S,
                                        h_Pinv,
                                        h_gamma,
