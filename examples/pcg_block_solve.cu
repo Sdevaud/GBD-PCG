@@ -34,42 +34,64 @@ int main(int argc, char *argv[]) {
     }
 
     struct pcg_config<float> config;
-    const int matrixH_size = 3 * knot_points * state_size * state_size;
-    float h_H[matrixH_size];
-    readArrayFromFile(matrixH_size, "data/I_H_tilde.txt", h_H);
+    config.pcg_poly_order = PRECOND_POLY_ORDER;
+    if (PRECOND_POLY_ORDER) {
+        const int matrixH_size = 3 * knot_points * state_size * state_size;
+        float h_H[matrixH_size];
 
-    uint32_t res = solvePCGBlock<float>(h_Sdb,
-                                        h_Sob,
-                                        h_Pinvdb,
-                                        h_Pinvob,
-                                        h_H,
-                                        h_gamma,
-                                        h_lambda,
-                                        state_size,
-                                        knot_points,
-                                        &config);
-    std::cout << "GBD-PCG-Block returned in " << res << " iters." << std::endl;
-    float norm = 0;
-    for (int i = 0; i < vector_size; i++) {
-        norm += h_lambda[i] * h_lambda[i];
+        // information of alpha should match with MATLAB file
+        int alpha_length = 17;
+        float alpha_array[alpha_length];
+        for (int i = 0; i < alpha_length; i++) {
+            alpha_array[i] = 1 + i * 0.25;
+        }
+
+        for (int i = 0; i < alpha_length; i++) {
+            float alpha = alpha_array[i];
+            std::string file_name = "data/I_H_tilde_";
+            file_name = file_name + std::to_string(i + 1) + ".txt";
+            const char *all = file_name.c_str();
+            printf("reading from file %s\n", all);
+            readArrayFromFile(matrixH_size, all, h_H);
+            uint32_t res = solvePCGBlock<float>(h_Sdb,
+                                                h_Sob,
+                                                h_Pinvdb,
+                                                h_Pinvob,
+                                                h_H,
+                                                h_gamma,
+                                                h_lambda,
+                                                state_size,
+                                                knot_points,
+                                                &config);
+            float norm = 0;
+            for (int i = 0; i < vector_size; i++) {
+                norm += h_lambda[i] * h_lambda[i];
+            }
+            printf("summary of PCG TRANS\n");
+            printf("type of preconditioner: %s\n", PRECOND_POLY_ORDER ? "p1s3" : "p0s3");
+            printf("alpha = %f\n", alpha);
+            printf("result: lambda norm = %f, pcg iter = %d\n\n", sqrt(norm), res);
+        }
+    } else {
+        float *h_H = NULL;
+        uint32_t res = solvePCGBlock<float>(h_Sdb,
+                                            h_Sob,
+                                            h_Pinvdb,
+                                            h_Pinvob,
+                                            h_H,
+                                            h_gamma,
+                                            h_lambda,
+                                            state_size,
+                                            knot_points,
+                                            &config);
+        float norm = 0;
+        for (int i = 0; i < vector_size; i++) {
+            norm += h_lambda[i] * h_lambda[i];
+        }
+        printf("summary of PCG TRANS\n");
+        printf("type of preconditioner: %s\n", PRECOND_POLY_ORDER ? "p1s3" : "p0s3");
+        printf("result: lambda norm = %f, pcg iter = %d\n", sqrt(norm), res);
     }
-    std::cout << "Lambda norm: " << sqrt(norm) << std::endl;
-
-//    tic
-//    int repeat = 1000;
-//    for (int i = 0; i < repeat; i++) {
-//        uint32_t res = solvePCGBlock<float>(h_Sdb,
-//                                            h_Sob,
-//                                            h_Pinvdb,
-//                                            h_Pinvob,
-//                                            h_gamma,
-//                                            h_lambda,
-//                                            state_size,
-//                                            knot_points,
-//                                            &config);
-//    }
-//    std::cout << "Repeat solvePCGBlock for " << repeat << " times takes ";
-//    toc
 
     return 0;
 }

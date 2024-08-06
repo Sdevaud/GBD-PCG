@@ -18,16 +18,16 @@ template<typename T>
 size_t pcgBlockSharedMemSize(uint32_t state_size, uint32_t knot_points, bool pcg_poly_order) {
     if (pcg_poly_order) {
         // poly_order = 1, use H
-        return sizeof(T) * (2 * 2 * state_size * state_size + // off-diagonal blocks of S & Pinv
-                            3 * state_size * state_size + // H size
-                            2 * state_size + // diagonal blocks of S & Pinv
-                            10 * state_size + // TODO: to be modified due to inclusion of H
+        return sizeof(T) * (4 * state_size * state_size +       // off-diagonal blocks of S & Pinv
+                            3 * state_size * state_size +       // H size
+                            2 * state_size +                    // diagonal blocks of S & Pinv
+                            8 * state_size +                    // all the rest vectors
                             max(state_size, knot_points));
     } else {
         // poly_order = 0, don't use H
-        return sizeof(T) * (2 * 2 * state_size * state_size + // off-diagonal blocks of S & Pinv
-                            2 * state_size + // diagonal blocks of S & Pinv
-                            7 * state_size +
+        return sizeof(T) * (4 * state_size * state_size +       // off-diagonal blocks of S & Pinv
+                            2 * state_size +                    // diagonal blocks of S & Pinv
+                            6 * state_size +                    // all the rest vectors
                             max(state_size, knot_points));
     }
 
@@ -65,7 +65,7 @@ bool checkPcgBlockOccupancy(void *kernel, dim3 block, uint32_t state_size, uint3
 }
 
 
-template<typename T, uint32_t state_size, uint32_t knot_points, bool poly_order>
+template<typename T, uint32_t state_size, uint32_t knot_points>
 __global__
 void pcgBlock(
         T *d_Sdb,           // diagonal blocks of S, size = N * nx
@@ -82,7 +82,8 @@ void pcgBlock(
         uint32_t *d_iters,
         bool *d_max_iter_exit,
         uint32_t max_iter,
-        T exit_tol) {
+        T exit_tol,
+        bool poly_order) {
 
     const cgrps::thread_block block = cgrps::this_thread_block();
     const cgrps::grid_group grid = cgrps::this_grid();
@@ -93,6 +94,7 @@ void pcgBlock(
     const uint32_t states_sq = state_size * state_size;
 
     extern __shared__ T s_temp[];
+    /* ---------- block shared mem declaration starts ----------*/
 
     // Sdb, Sob, Pinvdb, Pinvob memory cannot be shared within the block
     // it is preferable to have Sdb & Sob in consecutive mem. Same applies to Pinvdb, Pinvob.
@@ -109,33 +111,36 @@ void pcgBlock(
     }
 
     T *s_eta_new_b = s_v_b;         // share max(N, nx)
-    T *s_r_tilde = s_eta_new_b + max(knot_points, state_size);
+    T *s_lambda_b = s_eta_new_b + max(knot_points, state_size);
 
     // A graph shall be included to explain the memory allocation
-    T *s_upsilon = s_r_tilde;       // share nx
-    T *s_lambda = s_upsilon;
+    T *s_lambda = s_lambda_b - state_size;
 
     // lambda_{b-1:b+1}, p_{b-1:b+1}, r_{b-1:b+1} all in consecutive mem. Important!!!
     T *s_end;           // access beyond s_end is forbidden
     if (poly_order) {
-        s_end = s_lambda + 10 * state_size;
+        s_end = s_lambda_b + 8 * state_size;
     } else {
-        s_end = s_lambda + 7 * state_size;
+        s_end = s_lambda_b + 6 * state_size;
     }
     T *s_p = s_lambda + 2 * state_size;
+    T *s_r_tilde = s_p;
     T *s_r = s_lambda + 4 * state_size;
 
-    T *s_lambda_b = s_lambda + state_size;
     T *s_p_b = s_p + state_size;
     T *s_r_b = s_r + state_size;
     T *s_gamma = s_r_b + state_size;
+    T *s_upsilon = s_gamma;
 
+    // r_extra is introduced for poly_order = true because after r_extra = Pinv * r_{b-1:b+1}
+    // one extra step is needed: r_tilde = H * r_extra_{b-2, b, b+2}
     T *s_r_extra, *s_r_extra_b;
     if (poly_order) {
-        s_r_extra = s_lambda + 7 * state_size;
+        s_r_extra = s_lambda + 6 * state_size;
         s_r_extra_b = s_r_extra + state_size;
     }
 
+    /* ---------- block shared mem declaration ends ----------*/
     uint32_t iter;
     T alpha, beta, eta, eta_new;
     T gamma_norm, r_norm;
@@ -209,11 +214,11 @@ void pcgBlock(
         }
         grid.sync(); //-------------------------------------
 
-        // r_extra = H * r_tilde
+        // r_tilde = H * r_extra
         // load first and last part of s_r_extra from d_r (global memory).
         loadbdVecOther2<T, state_size, knot_points - 1>(s_r_extra, block_id, &d_r[block_x_statesize]);
         __syncthreads();
-        bdmv<T>(s_r_tilde, s_H, s_r_extra, state_size, knot_points - 1, block_id);
+        bdmv2<T>(s_r_tilde, s_H, s_r_extra, state_size, knot_points - 1, block_id);
         __syncthreads();
     }
 
@@ -282,11 +287,11 @@ void pcgBlock(
             }
             grid.sync(); //-------------------------------------
 
-            // r_extra = H * r_tilde
+            // r_tilde = H * r_extra
             // load first and last part of s_r_extra from d_r (global memory).
             loadbdVecOther2<T, state_size, knot_points - 1>(s_r_extra, block_id, &d_r[block_x_statesize]);
             __syncthreads();
-            bdmv<T>(s_r_tilde, s_H, s_r_extra, state_size, knot_points - 1, block_id);
+            bdmv2<T>(s_r_tilde, s_H, s_r_extra, state_size, knot_points - 1, block_id);
             __syncthreads();
         }
 

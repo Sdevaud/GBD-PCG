@@ -42,7 +42,7 @@ uint32_t solvePCGBlock(
     gpuErrchk(cudaMalloc(&d_Pinvob, 2 * Nnx2_T));
 
     T *d_H;
-    if (PRECOND_POLY_ORDER) {
+    if (config->pcg_poly_order) {
         gpuErrchk(cudaMalloc(&d_H, 3 * Nnx2_T));
     }
 
@@ -59,7 +59,7 @@ uint32_t solvePCGBlock(
     gpuErrchk(cudaMemcpy(d_Sob, h_Sob, 2 * Nnx2_T, cudaMemcpyHostToDevice));
     gpuErrchk(cudaMemcpy(d_Pinvdb, h_Pinvdb, Nnx_T, cudaMemcpyHostToDevice));
     gpuErrchk(cudaMemcpy(d_Pinvob, h_Pinvob, 2 * Nnx2_T, cudaMemcpyHostToDevice));
-    if (PRECOND_POLY_ORDER) {
+    if (config->pcg_poly_order) {
         gpuErrchk(cudaMemcpy(d_H, h_H, 3 * Nnx2_T, cudaMemcpyHostToDevice));
     }
     gpuErrchk(cudaMemcpy(d_lambda, h_lambda, Nnx_T, cudaMemcpyHostToDevice));
@@ -89,7 +89,7 @@ uint32_t solvePCGBlock(
     cudaFree(d_gamma);
     cudaFree(d_Pinvdb);
     cudaFree(d_Pinvob);
-    if (PRECOND_POLY_ORDER) {
+    if (config->pcg_poly_order) {
         cudaFree(d_H);
     }
     cudaFree(d_r);
@@ -119,11 +119,11 @@ uint32_t solvePCGBlock(const uint32_t state_size,
     bool *d_pcg_exit;
     gpuErrchk(cudaMalloc(&d_pcg_exit, sizeof(bool)));
 
-    void *pcg_kernel = (void *) pcgBlock<T, STATE_SIZE, KNOT_POINTS, PRECOND_POLY_ORDER>;
+    void *pcg_kernel = (void *) pcgBlock<T, STATE_SIZE, KNOT_POINTS>;
 
     // the following shall be turned off for speed
     bool gpu_check = checkPcgBlockOccupancy<T>(pcg_kernel, config->pcg_block, state_size, knot_points,
-                                               PRECOND_POLY_ORDER);
+                                               config->pcg_poly_order);
     // gpu_check shall always be true, o.w. the program exits
     // gpu_check true means
     //      1. Device supports Cooperative Threads
@@ -145,11 +145,11 @@ uint32_t solvePCGBlock(const uint32_t state_size,
             (void *) &d_pcg_exit,
             (void *) &config->pcg_max_iter,
             (void *) &config->pcg_exit_tol,
-            (void *) &config->empty_pinv
+            (void *) &config->pcg_poly_order
     };
     uint32_t h_pcg_iters;
 
-    size_t ppcg_kernel_smem_size = pcgBlockSharedMemSize<T>(state_size, knot_points, PRECOND_POLY_ORDER);
+    size_t ppcg_kernel_smem_size = pcgBlockSharedMemSize<T>(state_size, knot_points, config->pcg_poly_order);
 
     gpuErrchk(cudaLaunchCooperativeKernel(pcg_kernel, knot_points, pcg_constants::DEFAULT_BLOCK, kernelArgs,
                                           ppcg_kernel_smem_size));

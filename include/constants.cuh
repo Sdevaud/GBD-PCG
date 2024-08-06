@@ -15,6 +15,7 @@
 #endif
 
 namespace pcg_constants{
+    bool DEFAULT_PRECOND_POLY_ORDER = true;
     uint32_t DEFAULT_MAX_PCG_ITER = 1000;
 	template<typename T>
     T DEFAULT_EPSILON = 1e-8;

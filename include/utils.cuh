@@ -82,9 +82,15 @@ void loadbdVecOther2(T *s_var,
             s_var[ind] = *(d_var_b - 2 * block_dim + ind);
         }
     } else {
-        for (unsigned ind = threadIdx.x; ind < block_dim; ind += blockDim.x) {
-            s_var[ind + 2 * block_dim] = *(d_var_b + 2 * block_dim + ind);
-            s_var[ind] = *(d_var_b - 2 * block_dim + ind);
+        T *dst, *src;
+        for (unsigned ind = threadIdx.x; ind < 2 * block_dim; ind += blockDim.x) {
+            dst = s_var + ind + (ind >= block_dim) * block_dim;
+            if (ind < block_dim) {
+                src = d_var_b + ind - 2 * block_dim;
+            } else {
+                src = d_var_b + ind + block_dim;
+            }
+            *dst = *src;
         }
     }
 
@@ -113,6 +119,45 @@ void bdmv(T *s_dst,
             s_dst[r] = val;
         }
     } else if (block_id == max_block_id) {
+        for (unsigned r = threadIdx.x; r < b_dim; r += blockDim.x) {
+            val = static_cast<T>(0);
+            for (unsigned c = 0; c < 2 * b_dim; c++) {
+                val += s_mat[b_dim * c + r] * s_vec[c];
+            }
+            s_dst[r] = val;
+        }
+    } else {
+        for (unsigned r = threadIdx.x; r < b_dim; r += blockDim.x) {
+            val = static_cast<T>(0);
+            for (unsigned c = 0; c < 3 * b_dim; c++) {
+                val += s_mat[b_dim * c + r] * s_vec[c];
+            }
+            s_dst[r] = val;
+        }
+    }
+}
+
+
+template<typename T>
+__device__
+void bdmv2(T *s_dst,
+           T *s_mat,
+           T *s_vec,
+           uint32_t b_dim,
+           uint32_t max_block_id,
+           uint32_t block_id) {
+
+    T val;
+
+    if (block_id == 0 || block_id == 1) {
+        for (unsigned r = threadIdx.x; r < b_dim; r += blockDim.x) {
+            val = static_cast<T>(0);
+            for (unsigned c = 0; c < 2 * b_dim; c++) {
+                val += s_mat[b_dim * b_dim + b_dim * c + r] * s_vec[c + b_dim]; // var and var+1
+            }
+            s_dst[r] = val;
+        }
+    } else if (block_id == max_block_id || block_id == max_block_id - 1) {
         for (unsigned r = threadIdx.x; r < b_dim; r += blockDim.x) {
             val = static_cast<T>(0);
             for (unsigned c = 0; c < 2 * b_dim; c++) {
