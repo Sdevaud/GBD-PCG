@@ -17,8 +17,6 @@ uint32_t solvePCG(
         unsigned stateSize,
         unsigned knotPoints,
         struct pcg_config<T> *config) {
-    if (!config->empty_pinv)
-        printf("This api can only be called with no preconditioner\n");
 
     const uint32_t states_sq = stateSize * stateSize;
     const uint32_t Nnx_T = stateSize * knotPoints * sizeof(T);
