@@ -7,19 +7,21 @@
 
 namespace cgrps = cooperative_groups;
 
+// for pcg_trans.cuh, sparse block tri-diagonal matrix vector multiplication
 
-// 
-// block-diagonal matrix-vector product for pcg_block.cuh
-// 
 template<typename T>
 __device__
-void bdmv_block(T *s_dst, // size = b_dim
-                T *s_matdb, // always diagonal, size = b_dim
-                T *s_matod, // always two blocks, size = 2 * b_dim * b_dim
-                T *s_vec, // size = 3 * b_dim
-                uint32_t b_dim,
-                uint32_t max_block_id,
-                uint32_t block_id) {
+void blk_tri_mv_spa(T *s_dst,   // size = b_dim
+                    T *s_matdb, // diagonal matrix, size = b_dim
+                    T *s_matob, // left & right block matrices, size = 2 * b_dim * b_dim
+                    T *s_vec,   // size = 3 * b_dim
+                    uint32_t b_dim,
+                    uint32_t max_block_id,
+                    uint32_t block_id) {
+    // s_vec contains three vectors: b-1, b, b+1
+    // s_matdb contains the middle matrix block (diagonal)
+    // s_matob contains the left and right matrix blocks (dense)
+    // s_dst = s_matdb * b + s_matob * {b-1, b+1}
 
     T val;
 
@@ -27,9 +29,8 @@ void bdmv_block(T *s_dst, // size = b_dim
         for (unsigned r = threadIdx.x; r < b_dim; r += blockDim.x) {
             val = static_cast<T>(0);
             for (unsigned c = 0; c < b_dim; c++) {
-                // only
-                // right off-diagonal block times 3rd part of vector
-                val += s_matod[b_dim * b_dim + b_dim * c + r] * s_vec[c + 2 * b_dim]; // var and var+1
+                // only right off-diagonal block times 3rd part of vector
+                val += s_matob[b_dim * b_dim + b_dim * c + r] * s_vec[c + 2 * b_dim]; // var and var+1
             }
             // diagonal block times 2nd part of vector
             val += s_matdb[r] * s_vec[b_dim + r];
@@ -39,9 +40,8 @@ void bdmv_block(T *s_dst, // size = b_dim
         for (unsigned r = threadIdx.x; r < b_dim; r += blockDim.x) {
             val = static_cast<T>(0);
             for (unsigned c = 0; c < b_dim; c++) {
-                // only
-                // left off-diagonal block times 1st part of vector
-                val += s_matod[b_dim * c + r] * s_vec[c];
+                // only left off-diagonal block times 1st part of vector
+                val += s_matob[b_dim * c + r] * s_vec[c];
             }
             // diagonal block times 2nd part of vector
             val += s_matdb[r] * s_vec[b_dim + r];
@@ -52,9 +52,9 @@ void bdmv_block(T *s_dst, // size = b_dim
             val = static_cast<T>(0);
             for (unsigned c = 0; c < b_dim; c++) {
                 // left off-diagonal block times 1st part of vector
-                val += s_matod[b_dim * c + r] * s_vec[c];
+                val += s_matob[b_dim * c + r] * s_vec[c];
                 // right off-diagonal block times 3rd part of vector
-                val += s_matod[b_dim * b_dim + b_dim * c + r] * s_vec[c + 2 * b_dim];
+                val += s_matob[b_dim * b_dim + b_dim * c + r] * s_vec[c + 2 * b_dim];
             }
             // diagonal block times 2nd part of vector
             val += s_matdb[r] * s_vec[b_dim + r];

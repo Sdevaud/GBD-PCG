@@ -11,11 +11,11 @@
 #endif
 
 #ifndef PRECOND_POLY_ORDER
-#define PRECOND_POLY_ORDER  true  // false -> poly order = 0, true -> poly order = 1
+#define PRECOND_POLY_ORDER  1  // now supports poly_order = 0, 1, future may support = 2
 #endif
 
 namespace pcg_constants{
-    bool DEFAULT_PRECOND_POLY_ORDER = true;
+    int DEFAULT_PRECOND_POLY_ORDER = 1;
     uint32_t DEFAULT_MAX_PCG_ITER = 1000;
 	template<typename T>
     T DEFAULT_EPSILON = 1e-8;

@@ -35,15 +35,15 @@ int main(int argc, char *argv[]) {
 
     struct pcg_config<float> config;
     config.pcg_poly_order = PRECOND_POLY_ORDER;
-    if (PRECOND_POLY_ORDER) {
+    if (PRECOND_POLY_ORDER == 1) {
         const int matrixH_size = 3 * knot_points * state_size * state_size;
         float h_H[matrixH_size];
 
         // information of alpha should match with MATLAB file
-        int alpha_length = 17;
+        int alpha_length = 9;
         float alpha_array[alpha_length];
         for (int i = 0; i < alpha_length; i++) {
-            alpha_array[i] = 1 + i * 0.25;
+            alpha_array[i] = 1 + i * 0.5;
         }
 
         for (int i = 0; i < alpha_length; i++) {
@@ -53,7 +53,7 @@ int main(int argc, char *argv[]) {
             const char *all = file_name.c_str();
             printf("reading from file %s\n", all);
             readArrayFromFile(matrixH_size, all, h_H);
-            uint32_t res = solvePCGBlock<float>(h_Sdb,
+            uint32_t res = solvePCGTrans<float>(h_Sdb,
                                                 h_Sob,
                                                 h_Pinvdb,
                                                 h_Pinvob,
@@ -66,15 +66,16 @@ int main(int argc, char *argv[]) {
             float norm = 0;
             for (int i = 0; i < vector_size; i++) {
                 norm += h_lambda[i] * h_lambda[i];
+                h_lambda[i] = 0;
             }
             printf("summary of PCG TRANS\n");
-            printf("type of preconditioner: %s\n", PRECOND_POLY_ORDER ? "p1s3" : "p0s3");
+            printf("type of preconditioner: %s\n", PRECOND_POLY_ORDER == 1 ? "p1s3" : "p0s3");
             printf("alpha = %f\n", alpha);
             printf("result: lambda norm = %f, pcg iter = %d\n\n", sqrt(norm), res);
         }
-    } else {
+    } else if (PRECOND_POLY_ORDER == 0) {
         float *h_H = NULL;
-        uint32_t res = solvePCGBlock<float>(h_Sdb,
+        uint32_t res = solvePCGTrans<float>(h_Sdb,
                                             h_Sob,
                                             h_Pinvdb,
                                             h_Pinvob,
@@ -89,7 +90,7 @@ int main(int argc, char *argv[]) {
             norm += h_lambda[i] * h_lambda[i];
         }
         printf("summary of PCG TRANS\n");
-        printf("type of preconditioner: %s\n", PRECOND_POLY_ORDER ? "p1s3" : "p0s3");
+        printf("type of preconditioner: %s\n", PRECOND_POLY_ORDER == 1 ? "p1s3" : "p0s3");
         printf("result: lambda norm = %f, pcg iter = %d\n", sqrt(norm), res);
     }
 

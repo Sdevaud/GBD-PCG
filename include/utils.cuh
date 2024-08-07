@@ -9,11 +9,12 @@ namespace cgrps = cooperative_groups;
 
 template<typename T, uint32_t block_dim, uint32_t max_block_id>
 __device__
-void loadbdVec(T *s_var,
-               const uint32_t block_id,
-               T *d_var_b) {
+void loadVec_m1bp1(T *s_var,
+                   const uint32_t block_id,
+                   T *d_var_b) {
 
-    // Need to load b also now
+    // Need to load the middle part, m1bp1 means load b-1, b, b+1
+
     for (unsigned ind = threadIdx.x; ind < block_dim; ind += blockDim.x) {
         s_var[ind + block_dim] = *(d_var_b + ind);
     }
@@ -34,19 +35,16 @@ void loadbdVec(T *s_var,
             *dst = *src;
         }
     }
-
 }
 
 
 template<typename T, uint32_t block_dim, uint32_t max_block_id>
 __device__
-void loadbdVecOther(T *s_var,
-                    const uint32_t block_id,
-                    T *d_var_b) {
+void loadVec_m1p1(T *s_var,
+                  const uint32_t block_id,
+                  T *d_var_b) {
 
-//    for (unsigned ind = threadIdx.x; ind < block_dim; ind += blockDim.x) {
-//        s_var[ind + block_dim] = *(d_var_b + ind);
-//    }
+    // no need to load the middle part, m1p1 means load b-1 and b+1
 
     if (block_id == 0) {
         for (unsigned ind = threadIdx.x; ind < block_dim; ind += blockDim.x) {
@@ -64,14 +62,15 @@ void loadbdVecOther(T *s_var,
             *dst = *src;
         }
     }
-
 }
 
 template<typename T, uint32_t block_dim, uint32_t max_block_id>
 __device__
-void loadbdVecOther2(T *s_var,
-                     const uint32_t block_id,
-                     T *d_var_b) {
+void loadVec_m2p2(T *s_var,
+                  const uint32_t block_id,
+                  T *d_var_b) {
+
+    // no need to load the middle part, m2p2 means load b-2 and b+2
 
     if (block_id == 0 || block_id == 1) {
         for (unsigned ind = threadIdx.x; ind < block_dim; ind += blockDim.x) {
@@ -93,20 +92,21 @@ void loadbdVecOther2(T *s_var,
             *dst = *src;
         }
     }
-
 }
 
-// 
-// block-diagonal matrix-vector product
-// 
+// for pcg.cuh, dense block tri-diagonal matrix vector multiplication
+
 template<typename T>
 __device__
-void bdmv(T *s_dst,
-          T *s_mat,
-          T *s_vec,
-          uint32_t b_dim,
-          uint32_t max_block_id,
-          uint32_t block_id) {
+void blk_tri_mv(T *s_dst,
+                T *s_mat,
+                T *s_vec,
+                uint32_t b_dim,
+                uint32_t max_block_id,
+                uint32_t block_id) {
+    // s_vec contains the 3 vectors: b-1, b, b+1
+    // s_mat contains the 3 matrix blocks: left, middle, right
+    // s_dst = s_mat * {b-1, b, b+1}
 
     T val;
 
@@ -137,15 +137,16 @@ void bdmv(T *s_dst,
     }
 }
 
+// for pcg_trans.cuh, if I_H is used, poly_order = 1, sparse block penta-diagonal matrix vector multiplication
 
 template<typename T>
 __device__
-void bdmv2(T *s_dst,
-           T *s_mat,
-           T *s_vec,
-           uint32_t b_dim,
-           uint32_t max_block_id,
-           uint32_t block_id) {
+void blk_penta_mv(T *s_dst,
+                  T *s_mat,
+                  T *s_vec,
+                  uint32_t b_dim,
+                  uint32_t max_block_id,
+                  uint32_t block_id) {
 
     T val;
 

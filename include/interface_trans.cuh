@@ -4,12 +4,11 @@
 #include <stdint.h>
 #include "gpuassert.cuh"
 #include "types.cuh"
-#include "pcg_block.cuh"
+#include "pcg_trans.cuh"
 
 
-/* TODO: have a interface for accepting h_S in other formats*/
 template<typename T>
-uint32_t solvePCGBlock(
+uint32_t solvePCGTrans(
         T *h_Sdb,
         T *h_Sob,
         T *h_Pinvdb,
@@ -28,30 +27,31 @@ uint32_t solvePCGBlock(
     const uint32_t Nnx2_T = knotPoints * states_sq * sizeof(T);
 
     /* Create device memory d_Sdb, d_Sob, d_Pinvdb, d_Pinvob
-     * d_gamma, d_lambda, d_r, d_p, d_v_temp
-	d_eta_new_temp */
+     * d_gamma, d_lambda, d_r, d_p,
+     * d_v_temp, d_eta_new_temp
+     * d_H if applicable */
+
     T *d_Sdb, *d_Sob, *d_gamma, *d_lambda;
     gpuErrchk(cudaMalloc(&d_Sdb, Nnx_T));
     gpuErrchk(cudaMalloc(&d_Sob, 2 * Nnx2_T));
     gpuErrchk(cudaMalloc(&d_gamma, Nnx_T));
     gpuErrchk(cudaMalloc(&d_lambda, Nnx_T));
 
-
     T *d_Pinvdb, *d_Pinvob;
     gpuErrchk(cudaMalloc(&d_Pinvdb, Nnx_T));
     gpuErrchk(cudaMalloc(&d_Pinvob, 2 * Nnx2_T));
 
     T *d_H;
-    if (config->pcg_poly_order) {
+    if (config->pcg_poly_order == 1) {
         gpuErrchk(cudaMalloc(&d_H, 3 * Nnx2_T));
     }
 
     /*   PCG vars   */
     T *d_r, *d_p, *d_v_temp, *d_eta_new_temp;
     gpuErrchk(cudaMalloc(&d_r, Nnx_T));
-    d_p = d_r;
+    d_p = d_r;                      // share N*nx
     gpuErrchk(cudaMalloc(&d_v_temp, knotPoints * sizeof(T)));
-    d_eta_new_temp = d_v_temp;
+    d_eta_new_temp = d_v_temp;      // share N
 
 
     /* Copy S, Pinv, gamma, lambda*/
@@ -59,26 +59,26 @@ uint32_t solvePCGBlock(
     gpuErrchk(cudaMemcpy(d_Sob, h_Sob, 2 * Nnx2_T, cudaMemcpyHostToDevice));
     gpuErrchk(cudaMemcpy(d_Pinvdb, h_Pinvdb, Nnx_T, cudaMemcpyHostToDevice));
     gpuErrchk(cudaMemcpy(d_Pinvob, h_Pinvob, 2 * Nnx2_T, cudaMemcpyHostToDevice));
-    if (config->pcg_poly_order) {
+    if (config->pcg_poly_order == 1) {
         gpuErrchk(cudaMemcpy(d_H, h_H, 3 * Nnx2_T, cudaMemcpyHostToDevice));
     }
     gpuErrchk(cudaMemcpy(d_lambda, h_lambda, Nnx_T, cudaMemcpyHostToDevice));
     gpuErrchk(cudaMemcpy(d_gamma, h_gamma, Nnx_T, cudaMemcpyHostToDevice));
 
 
-    uint32_t pcg_iters = solvePCGBlock(stateSize, knotPoints,
-                                       d_Sdb,
-                                       d_Sob,
-                                       d_Pinvdb,
-                                       d_Pinvob,
-                                       d_H,
-                                       d_gamma,
-                                       d_lambda,
-                                       d_r,
-                                       d_p,
-                                       d_v_temp,
-                                       d_eta_new_temp,
-                                       config);
+    uint32_t pcg_iters = solvePCGTransCooperativeKernel(stateSize, knotPoints,
+                                                        d_Sdb,
+                                                        d_Sob,
+                                                        d_Pinvdb,
+                                                        d_Pinvob,
+                                                        d_H,
+                                                        d_gamma,
+                                                        d_lambda,
+                                                        d_r,
+                                                        d_p,
+                                                        d_v_temp,
+                                                        d_eta_new_temp,
+                                                        config);
 
     /* Copy data back */
     gpuErrchk(cudaMemcpy(h_lambda, d_lambda, Nnx_T, cudaMemcpyDeviceToHost));
@@ -89,7 +89,7 @@ uint32_t solvePCGBlock(
     cudaFree(d_gamma);
     cudaFree(d_Pinvdb);
     cudaFree(d_Pinvob);
-    if (config->pcg_poly_order) {
+    if (config->pcg_poly_order == 1) {
         cudaFree(d_H);
     }
     cudaFree(d_r);
@@ -100,29 +100,29 @@ uint32_t solvePCGBlock(
 
 
 template<typename T>
-uint32_t solvePCGBlock(const uint32_t state_size,
-                       const uint32_t knot_points,
-                       T *d_Sdb,
-                       T *d_Sob,
-                       T *d_Pinvdb,
-                       T *d_Pinvob,
-                       T *d_H,
-                       T *d_gamma,
-                       T *d_lambda,
-                       T *d_r,
-                       T *d_p,
-                       T *d_v_temp,
-                       T *d_eta_new_temp,
-                       struct pcg_config<T> *config) {
+uint32_t solvePCGTransCooperativeKernel(const uint32_t state_size,
+                                        const uint32_t knot_points,
+                                        T *d_Sdb,
+                                        T *d_Sob,
+                                        T *d_Pinvdb,
+                                        T *d_Pinvob,
+                                        T *d_H,
+                                        T *d_gamma,
+                                        T *d_lambda,
+                                        T *d_r,
+                                        T *d_p,
+                                        T *d_v_temp,
+                                        T *d_eta_new_temp,
+                                        struct pcg_config<T> *config) {
     uint32_t *d_pcg_iters;
     gpuErrchk(cudaMalloc(&d_pcg_iters, sizeof(uint32_t)));
     bool *d_pcg_exit;
     gpuErrchk(cudaMalloc(&d_pcg_exit, sizeof(bool)));
 
-    void *pcg_kernel = (void *) pcgBlock<T, STATE_SIZE, KNOT_POINTS>;
+    void *pcg_kernel = (void *) pcgTrans<T, STATE_SIZE, KNOT_POINTS>;
 
     // the following shall be turned off for speed
-    bool gpu_check = checkPcgBlockOccupancy<T>(pcg_kernel, config->pcg_block, state_size, knot_points,
+    bool gpu_check = checkPcgTransOccupancy<T>(pcg_kernel, config->pcg_block, state_size, knot_points,
                                                config->pcg_poly_order);
     // gpu_check shall always be true, o.w. the program exits
     // gpu_check true means
@@ -149,7 +149,7 @@ uint32_t solvePCGBlock(const uint32_t state_size,
     };
     uint32_t h_pcg_iters;
 
-    size_t ppcg_kernel_smem_size = pcgBlockSharedMemSize<T>(state_size, knot_points, config->pcg_poly_order);
+    size_t ppcg_kernel_smem_size = pcgTransSharedMemSize<T>(state_size, knot_points, config->pcg_poly_order);
 
     gpuErrchk(cudaLaunchCooperativeKernel(pcg_kernel, knot_points, pcg_constants::DEFAULT_BLOCK, kernelArgs,
                                           ppcg_kernel_smem_size));

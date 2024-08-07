@@ -14,7 +14,7 @@ clc
 close all
 digits(16)
 N = 20;
-nx = 20;
+nx = 15;
 nu = 1;
 
 % generate a set of random {A_k, B_k}
@@ -39,7 +39,7 @@ Q{N} = T*diag(rand(nx,1))*T';
 if ~exist('data', 'dir')
    mkdir('data')
 else
-   delete('./data/I_H_tilde*')
+   delete('./data/I_H*')
 end
 
 % compute S using {A_k, B_k, Q_k, R_k}
@@ -49,25 +49,27 @@ writeBlkTriDiagSymMatrixToFile(D, O, N, nx, './data/S.txt');
 [D_P, O_P, P_p0s3] = formPreconditionerSS(D, O, N, nx);
 writeBlkTriDiagSymMatrixToFile(D_P, O_P, N, nx, './data/P.txt');
 
-alpha = 3;
-[D_H, O_up2, O_down2, I_H3, P_p1s3] = formPolyPreconditionerH(D, O, N, nx, alpha);
-writeBlkPentaDiagMatrixToFile(D_H, O_up2, O_down2, N, nx, './data/I_H.txt')
+alpha = 1:0.5:5;
+for i=1:length(alpha)
+    [D_H, O_up2, O_down2, ~, ~] = formPolyPreconditionerH(D, O, N, nx, alpha(i));
+    writeBlkPentaDiagMatrixToFile(D_H, O_up2, O_down2, N, nx, ['./data/I_H_' num2str(i) '.txt'])
+end
 
 % compute S using {\tilde{A}_k, \tilde{B}_k, \tilde{Q}_k, R_k}
 % \tilde{A}_k = T_k * A_k * inv(T_{k-1})
 % \tilde{B}_k = T_k * B_k
 % \tilde{Q}_k = inv(T_k') * Q_k * inv(T_k)
 % R_k remains the same
-[D_tilde, O_tilde, S_tilde, T] = preprocessS(D, O, N, nx);
-writeMatrixToFileDiagonal(D_tilde, O_tilde, N, nx, './data/S');
+[D_til, O_til, S_til, T] = preprocessS(D, O, N, nx);
+writeMatrixToFileDiagonal(D_til, O_til, N, nx, './data/S');
 
-[D_P_tilde, O_P_tilde, P_p0s3_tilde] = formPreconditionerSS(D_tilde, O_tilde, N, nx);
-writeMatrixToFileDiagonal(D_P_tilde, O_P_tilde, N, nx, './data/P');
+[D_P_til, O_P_til, P_p0s3_til] = formPreconditionerSS(D_til, O_til, N, nx);
+writeMatrixToFileDiagonal(D_P_til, O_P_til, N, nx, './data/P');
 
-alpha = 1:0.25:5;
+alpha = 1:0.5:5;
 for i=1:length(alpha)
-    [D_H_tilde, O_up2_tilde, O_down2_tilde, I_H3_tilde ,P_p1s3_tilde] = formPolyPreconditionerH(D_tilde, O_tilde, N, nx, alpha(i));
-    writeBlkPentaDiagMatrixToFile(D_H_tilde, O_up2_tilde, O_down2_tilde, N, nx, ['./data/I_H_tilde_' num2str(i) '.txt'])
+    [D_H_til, O_up2_til, O_down2_til, ~ ,~] = formPolyPreconditionerH(D_til, O_til, N, nx, alpha(i));
+    writeBlkPentaDiagMatrixToFile(D_H_til, O_up2_til, O_down2_til, N, nx, ['./data/I_H_tilde_' num2str(i) '.txt'])
 end
 
 % generate random \gamma as RHS
@@ -77,47 +79,52 @@ writematrix(gamma, './data/gamma.txt');
 % solve S * \lambda = \gamma
 % lambda = S \ gamma;
 pcg_max_iter = 1000;
-
+[~, ~, ~, I_H3 ,P_p1s3] = formPolyPreconditionerH(D, O, N, nx, 1);
 [lambda_p0s3, I_p0s3]= PCG(P_p0s3, eye(N*nx), S, gamma, zeros(N*nx,1), 1e-8, pcg_max_iter);
 [lambda_p1s3, I_p1s3]= PCG(P_p0s3, I_H3, S, gamma, zeros(N*nx,1), 1e-8, pcg_max_iter);
 
 % prepare \tilde{\gamma} = T * \gamma
-gamma_tilde = zeros(N*nx, 1);
+gamma_til = zeros(N*nx, 1);
 for i=1:N
-    gamma_tilde(1+(i-1)*nx:i*nx,1) = T{i}*gamma(1+(i-1)*nx:i*nx,1);
+    gamma_til(1+(i-1)*nx:i*nx,1) = T{i}*gamma(1+(i-1)*nx:i*nx,1);
 end
-writematrix(gamma_tilde, './data/gamma_tilde.txt');
+writematrix(gamma_til, './data/gamma_tilde.txt');
 
 % solve \tilde{S} * \tilde{\lambda} = \tilde{\gamma}
 % lambda_tilde = S_tilde \ gamma_tilde;
-[lambda_p0s3_tilde, I_p0s3_tilde]= PCG(P_p0s3_tilde, eye(N*nx), S_tilde, gamma_tilde, zeros(N*nx,1), 1e-8, pcg_max_iter);
-[lambda_p1s3_tilde, I_p1s3_tilde]= PCG(P_p0s3_tilde, I_H3_tilde, S_tilde, gamma_tilde, zeros(N*nx,1), 1e-8, pcg_max_iter);
+[~, ~, ~, I_H3_til ,P_p1s3_til] = formPolyPreconditionerH(D_til, O_til, N, nx, 1);
+[lambda_p0s3_til, I_p0s3_til]= PCG(P_p0s3_til, eye(N*nx), S_til, gamma_til, zeros(N*nx,1), 1e-8, pcg_max_iter);
+[lambda_p1s3_til, I_p1s3_til]= PCG(P_p0s3_til, I_H3_til, S_til, gamma_til, zeros(N*nx,1), 1e-8, pcg_max_iter);
 
 % get back \lambda = T' * \tilde{\lambda}
 lambda_new = zeros(N*nx, 1);
 for i=1:N
-    lambda_new(1+(i-1)*nx:i*nx,1) = T{i}'*lambda_p1s3_tilde(1+(i-1)*nx:i*nx,1);
+    lambda_new(1+(i-1)*nx:i*nx,1) = T{i}'*lambda_p1s3_til(1+(i-1)*nx:i*nx,1);
 end
 
 disp(['norm of lambda p0s3 = ', num2str(norm(lambda_p0s3))])
 disp(['norm of lambda p1s3 = ', num2str(norm(lambda_p1s3))])
-disp(['norm of lambda_tilde p0s3 = ', num2str(norm(lambda_p0s3_tilde))])
-disp(['norm of lambda_tilde p1s3 = ', num2str(norm(lambda_p1s3_tilde))])
+disp(['norm of lambda_tilde p0s3 = ', num2str(norm(lambda_p0s3_til))])
+disp(['norm of lambda_tilde p1s3 = ', num2str(norm(lambda_p1s3_til))])
 
 % check two lambda are equal 
 disp(['norm of lambda - lambda_new = ', num2str(norm(lambda_new - lambda_p1s3))])
 
 % check condition numbers 
-disp(['cond(P*S) p0s3 = ', num2str(cond(P_p0s3*S)), ', cond(P_tilde*S_tilde) p0s3 = ', num2str(cond(P_p0s3_tilde*S_tilde))])
-disp(['cond(P*S) p1s3 = ', num2str(cond(P_p1s3*S)), ', cond(P_tilde*S_tilde) p1s3 = ', num2str(cond(P_p1s3_tilde*S_tilde))])
+disp(['cond(P*S) p0s3 = ', num2str(cond(P_p0s3*S)), ', cond(P_til*S_til) p0s3 = ', num2str(cond(P_p0s3_til*S_til))])
+disp(['cond(P*S) p1s3 = ', num2str(cond(P_p1s3*S)), ', cond(P_til*S_til) p1s3 = ', num2str(cond(P_p1s3_til*S_til))])
 
-disp(['PCG iterations for P*S p0s3 = ', num2str(I_p0s3), ', for P_tilde*S_tilde p0s3 = ', num2str(I_p0s3_tilde)])
-disp(['PCG iterations for P*S p1s3 = ', num2str(I_p1s3), ', for P_tilde*S_tilde p1s3 = ', num2str(I_p1s3_tilde)])
+disp(['PCG iterations for P*S p0s3 = ', num2str(I_p0s3), ', for P_til*S_til p0s3 = ', num2str(I_p0s3_til)])
+disp(['PCG iterations for P*S p1s3 = ', num2str(I_p1s3), ', for P_til*S_til p1s3 = ', num2str(I_p1s3_til)])
 
 for i=1:length(alpha)
-    [~, ~, ~, I_H3_tilde ,~] = formPolyPreconditionerH(D_tilde, O_tilde, N, nx, alpha(i));
-    [~, I_p1s3_alpha]= PCG(P_p0s3_tilde, I_H3_tilde, S_tilde, gamma_tilde, zeros(N*nx,1), 1e-8, pcg_max_iter);
-    disp(['PCG iterations for P_tilde*S_tilde p1s3 = ', num2str(I_p1s3_alpha) ' alpha = ',num2str(alpha(i))])
+    [~, ~, ~, I_H3 ,~] = formPolyPreconditionerH(D, O, N, nx, alpha(i));
+    [~, I_p1s3_a]= PCG(P_p0s3, I_H3, S, gamma, zeros(N*nx,1), 1e-8, pcg_max_iter);
+    
+    [~, ~, ~, I_H3_til ,~] = formPolyPreconditionerH(D_til, O_til, N, nx, alpha(i));
+    [~, I_p1s3_a_til]= PCG(P_p0s3_til, I_H3_til, S_til, gamma_til, zeros(N*nx,1), 1e-8, pcg_max_iter);
+    
+    disp(['alpha = ',num2str(alpha(i)) ' PCG iterations for P*S p1s3 = ', num2str(I_p1s3_a) ' for P_til*S_til p1s3 = ', num2str(I_p1s3_a_til) ])
 end
 
 function writeMatrixToFileDiagonal(D, O, N, nx, matrixname)
