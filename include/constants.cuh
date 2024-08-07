@@ -1,4 +1,5 @@
 #pragma once
+
 #include <cstdint>
 #include <cuda_runtime.h>
 
@@ -10,14 +11,19 @@
 #define KNOT_POINTS  3
 #endif
 
+#ifndef PCG_TYPE
+#define PCG_TYPE  true  // false -> org, true -> trans
+#endif
+
 #ifndef PRECOND_POLY_ORDER
 #define PRECOND_POLY_ORDER  1  // now supports poly_order = 0, 1, future may support = 2
 #endif
 
-namespace pcg_constants{
+namespace pcg_constants {
+    bool DEFAULT_PCG_TYPE = true;
     int DEFAULT_PRECOND_POLY_ORDER = 1;
     uint32_t DEFAULT_MAX_PCG_ITER = 1000;
-	template<typename T>
+    template<typename T>
     T DEFAULT_EPSILON = 1e-8;
     dim3 DEFAULT_GRID(128);
     dim3 DEFAULT_BLOCK(32);     // should be >= 32 because one warp contains 32 threads

@@ -13,14 +13,17 @@ struct pcg_config {
     dim3 pcg_grid;
     dim3 pcg_block;
 
-    int pcg_poly_order;
+    bool pcg_org_trans; // false -> org, true -> trans
+
+    int pcg_poly_order; // now supports poly_order = 0, 1, future may support = 2
 
     pcg_config(T exit_tol = pcg_constants::DEFAULT_EPSILON<T>,
                uint32_t max_iter = pcg_constants::DEFAULT_MAX_PCG_ITER,
                dim3 grid = pcg_constants::DEFAULT_GRID,
                dim3 block = pcg_constants::DEFAULT_BLOCK,
+               bool org_trans = pcg_constants::DEFAULT_PCG_TYPE,
                int poly_order = pcg_constants::DEFAULT_PRECOND_POLY_ORDER)
             :
             pcg_exit_tol(exit_tol), pcg_max_iter(max_iter), pcg_grid(grid), pcg_block(block),
-            pcg_poly_order(poly_order) {}
+            pcg_org_trans(org_trans), pcg_poly_order(poly_order) {}
 };

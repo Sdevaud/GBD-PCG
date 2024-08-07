@@ -11,27 +11,52 @@
 namespace cgrps = cooperative_groups;
 
 template<typename T>
-size_t pcgSharedMemSize(uint32_t state_size, uint32_t knot_points, int pcg_poly_order) {
-    if (pcg_poly_order == 1) {
-        // poly_order = 1, use I_H
-        return sizeof(T) * (2 * 3 * state_size * state_size +       // dense S and Pinv
-                            3 * state_size * state_size +       // H size
-                            8 * state_size +
-                            max(state_size, knot_points));
-    } else if (pcg_poly_order == 0) {
-        // poly_order = 0, don't use I_H
-        return sizeof(T) * (2 * 3 * state_size * state_size +       // dense S and Pinv
-                            6 * state_size +
-                            max(state_size, knot_points));
+size_t pcgSharedMemSize(uint32_t state_size, uint32_t knot_points, bool org_trans, int poly_order) {
+    if (org_trans) {
+        // TRANS
+        if (poly_order == 1) {
+            // poly_order = 1, use I_H
+            return sizeof(T) * (4 * state_size * state_size +       // off-diagonal blocks of S & Pinv
+                                3 * state_size * state_size +       // H size
+                                2 * state_size +                    // diagonal blocks of S & Pinv
+                                8 * state_size +                    // all the rest vectors
+                                max(state_size, knot_points));
+        } else if (poly_order == 0) {
+            // poly_order = 0, don't use I_H
+            return sizeof(T) * (4 * state_size * state_size +       // off-diagonal blocks of S & Pinv
+                                2 * state_size +                    // diagonal blocks of S & Pinv
+                                6 * state_size +                    // all the rest vectors
+                                max(state_size, knot_points));
+        } else {
+            // other value of poly_order not implemented yet
+            return 0;
+        }
+    } else {
+        // ORG
+        if (poly_order == 1) {
+            // poly_order = 1, use I_H
+            return sizeof(T) * (2 * 3 * state_size * state_size +       // dense S and Pinv
+                                3 * state_size * state_size +           // H size
+                                8 * state_size +
+                                max(state_size, knot_points));
+        } else if (poly_order == 0) {
+            // poly_order = 0, don't use I_H
+            return sizeof(T) * (2 * 3 * state_size * state_size +       // dense S and Pinv
+                                6 * state_size +
+                                max(state_size, knot_points));
+        } else {
+            // other value of poly_order not implemented yet
+            return 0;
+        }
     }
-
 }
 
 
 template<typename T>
-bool checkPcgOccupancy(void *kernel, dim3 block, uint32_t state_size, uint32_t knot_points, int pcg_poly_order) {
+bool checkPcgOccupancy(void *kernel, dim3 block, uint32_t state_size, uint32_t knot_points, bool org_trans,
+                       int poly_order) {
 
-    const uint32_t smem_size = pcgSharedMemSize<T>(state_size, knot_points, pcg_poly_order);
+    const uint32_t smem_size = pcgSharedMemSize<T>(state_size, knot_points, org_trans, poly_order);
     int dev = 0;
 
     cudaDeviceProp deviceProp;
@@ -62,19 +87,20 @@ bool checkPcgOccupancy(void *kernel, dim3 block, uint32_t state_size, uint32_t k
 template<typename T, uint32_t state_size, uint32_t knot_points>
 __global__
 void pcg(
-        T *d_S,
-        T *d_Pinv,
-        T *d_H,
-        T *d_gamma,
-        T *d_lambda,
-        T *d_r,
-        T *d_p,
-        T *d_v_temp,
-        T *d_eta_new_temp,
+        T *d_S,     // if ORG, size = 3Nnx^2; if TRANS, size = Nnx + 2Nnx^2, diagonal blocks | off-diagonal blocks
+        T *d_Pinv,  // if ORG, size = 3Nnx^2; if TRANS, size = Nnx + 2Nnx^2, diagonal blocks | off-diagonal blocks
+        T *d_I_H,   // if poly_order = 0, d_I_H = NULL; if poly_order = 1, size = 3Nnx^2; if poly_order = 2, TODO
+        T *d_gamma,         // size = Nnx
+        T *d_lambda,        // size = Nnx 
+        T *d_r,             // size = Nnx 
+        T *d_p,             // size = Nnx 
+        T *d_v_temp,        // size = N
+        T *d_eta_new_temp,  // size = N
         uint32_t *d_iters,
         bool *d_max_iter_exit,
         uint32_t max_iter,
         T exit_tol,
+        bool org_trans,
         int poly_order) {
 
     const cgrps::thread_block block = cgrps::this_thread_block();
@@ -84,18 +110,34 @@ void pcg(
     const uint32_t thread_id = threadIdx.x;
     const uint32_t block_x_statesize = block_id * state_size;
     const uint32_t states_sq = state_size * state_size;
+    const uint32_t Nnx = state_size * knot_points;
 
     extern __shared__ T s_temp[];
     /* ---------- block shared mem declaration starts ----------*/
 
-    T *s_S = s_temp;
-    T *s_Pinv = s_S + 3 * states_sq;
-    T *s_H, *s_v_b;
+    T *s_S, *s_Pinv;                            // for ORG
+    T *s_Sdb, *s_Sob, *s_Pinvdb, *s_Pinvob;     // for TRANS db = diagonal block; ob = off-diagonal block
+    T *s_SPinv_end;
+    if (org_trans) {
+        // TRANS
+        s_Sdb = s_temp;
+        s_Sob = s_Sdb + state_size;
+        s_Pinvdb = s_Sob + 2 * states_sq;
+        s_Pinvob = s_Pinvdb + state_size;
+        s_SPinv_end = s_Pinvob + 2 * states_sq;
+    } else {
+        // ORG
+        s_S = s_temp;
+        s_Pinv = s_S + 3 * states_sq;
+        s_SPinv_end = s_Pinv + 3 * states_sq;
+    }
+
+    T *s_I_H, *s_v_b;
     if (poly_order == 1) {
-        s_H = s_Pinv + 3 * states_sq;
-        s_v_b = s_H + 3 * states_sq;        // H size = 3nx^2, if needed
+        s_I_H = s_SPinv_end;
+        s_v_b = s_I_H + 3 * states_sq;        // H size = 3nx^2, if needed
     } else if (poly_order == 0) {
-        s_v_b = s_Pinv + 3 * states_sq;
+        s_v_b = s_SPinv_end;
     }
 
     T *s_eta_new_b = s_v_b;                 // share max(N, nx)
@@ -133,22 +175,39 @@ void pcg(
     /* ---------- block shared mem writing-in starts ----------*/
 
     // populate shared memory
-    for (unsigned ind = thread_id; ind < 3 * states_sq; ind += block_dim) {
-        if (block_id == 0 && ind < states_sq) { continue; }
-        if (block_id == knot_points - 1 && ind >= 2 * states_sq) { continue; }
+    if (org_trans) {
+        // TRANS
+        // load Sob, Pinvob from GPU global mem to block shared mem
+        for (unsigned ind = thread_id; ind < 2 * states_sq; ind += block_dim) {
+            if (block_id == 0 && ind < states_sq) { continue; }
+            if (block_id == knot_points - 1 && ind >= states_sq) { continue; }
 
-        s_S[ind] = d_S[block_id * states_sq * 3 + ind];
-        s_Pinv[ind] = d_Pinv[block_id * states_sq * 3 + ind];
+            s_Sob[ind] = d_S[Nnx + block_id * states_sq * 2 + ind];
+            s_Pinvob[ind] = d_Pinv[Nnx + block_id * states_sq * 2 + ind];
+        }
+        // load Sdb, Pinvdb, gamma from GPU global mem to block shared mem
+        glass::copy<T>(state_size, &d_S[block_x_statesize], s_Sdb);
+        glass::copy<T>(state_size, &d_Pinv[block_x_statesize], s_Pinvdb);
+    } else {
+        // ORG
+        // load dense S, Pinv from GPU global mem to block shared mem
+        for (unsigned ind = thread_id; ind < 3 * states_sq; ind += block_dim) {
+            if (block_id == 0 && ind < states_sq) { continue; }
+            if (block_id == knot_points - 1 && ind >= 2 * states_sq) { continue; }
+
+            s_S[ind] = d_S[block_id * states_sq * 3 + ind];
+            s_Pinv[ind] = d_Pinv[block_id * states_sq * 3 + ind];
+        }
     }
     glass::copy<T>(state_size, &d_gamma[block_x_statesize], s_gamma);
 
     if (poly_order == 1) {
-        // load H from GPU global mem to block shared mem
+        // load H from GPU global mem to block shared mem, if applicable
         for (unsigned ind = thread_id; ind < 3 * states_sq; ind += block_dim) {
             if ((block_id == 0 || block_id == 1) && ind < states_sq) { continue; }
             if ((block_id == knot_points - 1 || block_id == knot_points - 2) && ind >= 2 * states_sq) { continue; }
 
-            s_H[ind] = d_H[block_id * states_sq * 3 + ind];
+            s_I_H[ind] = d_I_H[block_id * states_sq * 3 + ind];
         }
     }
 
@@ -174,7 +233,13 @@ void pcg(
     // r = gamma - S * lambda
     loadVec_m1bp1<T, state_size, knot_points - 1>(s_lambda, block_id, &d_lambda[block_x_statesize]);
     __syncthreads();
-    blk_tri_mv<T>(s_r_b, s_S, s_lambda, state_size, knot_points - 1, block_id);
+    if (org_trans) {
+        // TRANS
+        blk_tri_mv_spa<T>(s_r_b, s_Sdb, s_Sob, s_lambda, state_size, knot_points - 1, block_id);
+    } else {
+        // ORG
+        blk_tri_mv<T>(s_r_b, s_S, s_lambda, state_size, knot_points - 1, block_id);
+    }
     __syncthreads();
     for (unsigned ind = thread_id; ind < state_size; ind += block_dim) {
         s_r_b[ind] = s_gamma[ind] - s_r_b[ind];
@@ -183,9 +248,16 @@ void pcg(
     grid.sync();
 
     // r_tilde = Pinv * r
+    // load first and last part of s_r from d_r (global memory).
     loadVec_m1bp1<T, state_size, knot_points - 1>(s_r, block_id, &d_r[block_x_statesize]);
     __syncthreads();
-    blk_tri_mv<T>(s_r_tilde, s_Pinv, s_r, state_size, knot_points - 1, block_id);
+    if (org_trans) {
+        // TRANS
+        blk_tri_mv_spa<T>(s_r_tilde, s_Pinvdb, s_Pinvob, s_r, state_size, knot_points - 1, block_id);
+    } else {
+        // ORG
+        blk_tri_mv<T>(s_r_tilde, s_Pinv, s_r, state_size, knot_points - 1, block_id);
+    }
     __syncthreads();
 
     if (poly_order == 1) {
@@ -201,7 +273,7 @@ void pcg(
         // load first and last part of s_r_extra from d_r (global memory).
         loadVec_m2p2<T, state_size, knot_points - 1>(s_r_extra, block_id, &d_r[block_x_statesize]);
         __syncthreads();
-        blk_penta_mv<T>(s_r_tilde, s_H, s_r_extra, state_size, knot_points - 1, block_id);
+        blk_penta_mv<T>(s_r_tilde, s_I_H, s_r_extra, state_size, knot_points - 1, block_id);
         __syncthreads();
     }
 
@@ -223,9 +295,16 @@ void pcg(
 
     for (iter = 0; iter < max_iter; iter++) {
         // upsilon = S * p
+        // load first and last part of s_p from d_p (global memory).
         loadVec_m1p1<T, state_size, knot_points - 1>(s_p, block_id, &d_p[block_x_statesize]);
         __syncthreads();
-        blk_tri_mv<T>(s_upsilon, s_S, s_p, state_size, knot_points - 1, block_id);
+        if (org_trans) {
+            // TRANS
+            blk_tri_mv_spa<T>(s_upsilon, s_Sdb, s_Sob, s_p, state_size, knot_points - 1, block_id);
+        } else {
+            // ORG
+            blk_tri_mv<T>(s_upsilon, s_S, s_p, state_size, knot_points - 1, block_id);
+        }
         __syncthreads();
 
         // alpha = eta / p * upsilon
@@ -247,9 +326,16 @@ void pcg(
         grid.sync();
 
         // r_tilde = Pinv * r
+        // load first and last part of s_r from d_r (global memory).
         loadVec_m1p1<T, state_size, knot_points - 1>(s_r, block_id, &d_r[block_x_statesize]);
         __syncthreads();
-        blk_tri_mv<T>(s_r_tilde, s_Pinv, s_r, state_size, knot_points - 1, block_id);
+        if (org_trans) {
+            // TRANS
+            blk_tri_mv_spa<T>(s_r_tilde, s_Pinvdb, s_Pinvob, s_r, state_size, knot_points - 1, block_id);
+        } else {
+            // ORG
+            blk_tri_mv<T>(s_r_tilde, s_Pinv, s_r, state_size, knot_points - 1, block_id);
+        }
         __syncthreads();
 
         if (poly_order == 1) {
@@ -265,7 +351,7 @@ void pcg(
             // load first and last part of s_r_extra from d_r (global memory).
             loadVec_m2p2<T, state_size, knot_points - 1>(s_r_extra, block_id, &d_r[block_x_statesize]);
             __syncthreads();
-            blk_penta_mv<T>(s_r_tilde, s_H, s_r_extra, state_size, knot_points - 1, block_id);
+            blk_penta_mv<T>(s_r_tilde, s_I_H, s_r_extra, state_size, knot_points - 1, block_id);
             __syncthreads();
         }
 
