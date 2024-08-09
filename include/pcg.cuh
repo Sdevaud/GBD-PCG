@@ -14,39 +14,33 @@ template<typename T>
 size_t pcgSharedMemSize(uint32_t state_size, uint32_t knot_points, bool org_trans, int poly_order) {
     if (org_trans) {
         // TRANS
-        if (poly_order == 1) {
-            // poly_order = 1, use I_H
+        if (poly_order > 0) {
+            // poly_order = 1, 2, ... use H
             return sizeof(T) * (4 * state_size * state_size +       // off-diagonal blocks of S & Pinv
                                 3 * state_size * state_size +       // H size
                                 2 * state_size +                    // diagonal blocks of S & Pinv
                                 8 * state_size +                    // all the rest vectors
                                 max(state_size, knot_points));
-        } else if (poly_order == 0) {
-            // poly_order = 0, don't use I_H
+        } else {
+            // poly_order = 0, don't use H
             return sizeof(T) * (4 * state_size * state_size +       // off-diagonal blocks of S & Pinv
                                 2 * state_size +                    // diagonal blocks of S & Pinv
                                 6 * state_size +                    // all the rest vectors
                                 max(state_size, knot_points));
-        } else {
-            // other value of poly_order not implemented yet
-            return 0;
         }
     } else {
         // ORG
-        if (poly_order == 1) {
-            // poly_order = 1, use I_H
+        if (poly_order > 0) {
+            // poly_order = 1, 2, ... use H
             return sizeof(T) * (2 * 3 * state_size * state_size +       // dense S and Pinv
                                 3 * state_size * state_size +           // H size
                                 8 * state_size +
                                 max(state_size, knot_points));
-        } else if (poly_order == 0) {
-            // poly_order = 0, don't use I_H
+        } else {
+            // poly_order = 0, don't use H
             return sizeof(T) * (2 * 3 * state_size * state_size +       // dense S and Pinv
                                 6 * state_size +
                                 max(state_size, knot_points));
-        } else {
-            // other value of poly_order not implemented yet
-            return 0;
         }
     }
 }
@@ -89,7 +83,7 @@ __global__
 void pcg(
         T *d_S,     // if ORG, size = 3Nnx^2; if TRANS, size = Nnx + 2Nnx^2, diagonal blocks | off-diagonal blocks
         T *d_Pinv,  // if ORG, size = 3Nnx^2; if TRANS, size = Nnx + 2Nnx^2, diagonal blocks | off-diagonal blocks
-        T *d_I_H,   // if poly_order = 0, d_I_H = NULL; if poly_order = 1, size = 3Nnx^2; if poly_order = 2, TODO
+        T *d_H,     // if poly_order == 0, d_H = NULL; if poly_order > 0, size = 3Nnx^2
         T *d_gamma,         // size = Nnx
         T *d_lambda,        // size = Nnx 
         T *d_r,             // size = Nnx 
@@ -101,7 +95,8 @@ void pcg(
         uint32_t max_iter,
         T exit_tol,
         bool org_trans,
-        int poly_order) {
+        int poly_order,
+        T *poly_coeff) {
 
     const cgrps::thread_block block = cgrps::this_thread_block();
     const cgrps::grid_group grid = cgrps::this_grid();
@@ -132,11 +127,13 @@ void pcg(
         s_SPinv_end = s_Pinv + 3 * states_sq;
     }
 
-    T *s_I_H, *s_v_b;
-    if (poly_order == 1) {
-        s_I_H = s_SPinv_end;
-        s_v_b = s_I_H + 3 * states_sq;        // H size = 3nx^2, if needed
-    } else if (poly_order == 0) {
+    T *s_H, *s_v_b;
+    if (poly_order > 0) {
+        // poly_order = 1, 2, ... use H
+        s_H = s_SPinv_end;
+        s_v_b = s_H + 3 * states_sq;        // H size = 3nx^2, if needed
+    } else {
+        // poly_order = 0, don't use H
         s_v_b = s_SPinv_end;
     }
 
@@ -148,9 +145,11 @@ void pcg(
 
     // lambda_{b-1:b+1}, p_{b-1:b+1}, r_{b-1:b+1} all in consecutive mem. Important!!!
     T *s_end;                               // access beyond s_end is forbidden
-    if (poly_order == 1) {
+    if (poly_order > 0) {
+        // poly_order = 1, 2, ... use H
         s_end = s_lambda_b + 8 * state_size;
-    } else if (poly_order == 0) {
+    } else {
+        // poly_order = 0, don't use H
         s_end = s_lambda_b + 6 * state_size;
     }
     T *s_p = s_lambda + 2 * state_size;
@@ -162,10 +161,11 @@ void pcg(
     T *s_gamma = s_r_b + state_size;
     T *s_upsilon = s_gamma;
 
-    // r_extra is introduced for poly_order == 1 because after r_extra = Pinv * r_{b-1:b+1}
+    // r_extra is introduced for poly_order > 0 because after r_extra = Pinv * r_{b-1:b+1}
     // one extra step is needed: r_tilde = H * r_extra_{b-2, b, b+2}
     T *s_r_extra, *s_r_extra_b;
-    if (poly_order == 1) {
+    if (poly_order > 0) {
+        // poly_order = 1, 2, ... use H
         s_r_extra = s_lambda + 6 * state_size;
         s_r_extra_b = s_r_extra + state_size;
     }
@@ -201,13 +201,13 @@ void pcg(
     }
     glass::copy<T>(state_size, &d_gamma[block_x_statesize], s_gamma);
 
-    if (poly_order == 1) {
+    if (poly_order > 0) {
         // load H from GPU global mem to block shared mem, if applicable
         for (unsigned ind = thread_id; ind < 3 * states_sq; ind += block_dim) {
             if ((block_id == 0 || block_id == 1) && ind < states_sq) { continue; }
             if ((block_id == knot_points - 1 || block_id == knot_points - 2) && ind >= 2 * states_sq) { continue; }
 
-            s_I_H[ind] = d_I_H[block_id * states_sq * 3 + ind];
+            s_H[ind] = d_H[block_id * states_sq * 3 + ind];
         }
     }
 
@@ -260,12 +260,15 @@ void pcg(
     }
     __syncthreads();
 
-    if (poly_order == 1) {
+    if (poly_order > 0) {
+        // poly_order = 1, 2, ... use H
         for (uint32_t ind = thread_id; ind < state_size; ind += block_dim) {
             // save s_r_tilde to d_r globally
             d_r[block_x_statesize + ind] = s_r_tilde[ind];
             // load s_r_tilde to middle part of s_r_extra locally.
             s_r_extra[ind + state_size] = s_r_tilde[ind];
+            // store s_r_tilde to s_v_b temporarily
+            s_v_b[ind] = s_r_tilde[ind];
         }
         grid.sync();
 
@@ -273,8 +276,36 @@ void pcg(
         // load first and last part of s_r_extra from d_r (global memory).
         loadVec_m2p2<T, state_size, knot_points - 1>(s_r_extra, block_id, &d_r[block_x_statesize]);
         __syncthreads();
-        blk_penta_mv<T>(s_r_tilde, s_I_H, s_r_extra, state_size, knot_points - 1, block_id);
+        blk_penta_mv<T>(s_r_tilde, s_H, s_r_extra, state_size, knot_points - 1, block_id);
         __syncthreads();
+        T a = poly_coeff[0];
+        for (uint32_t ind = thread_id; ind < state_size; ind += block_dim) {
+            if (poly_order > 1) {
+                // save s_r_tilde to d_r globally
+                d_r[block_x_statesize + ind] = s_r_tilde[ind];
+                // load s_r_tilde to middle part of s_r_extra locally.
+                s_r_extra[ind + state_size] = s_r_tilde[ind];
+            }
+            s_r_tilde[ind] = s_r_tilde[ind] * a + s_v_b[ind];
+            if (poly_order > 1) {
+                // store s_r_tilde to s_v_b temporarily
+                s_v_b[ind] = s_r_tilde[ind];
+            }
+        }
+        __syncthreads();
+        if (poly_order > 1) {
+            grid.sync();
+            // load first and last part of s_r_extra from d_r (global memory).
+            loadVec_m2p2<T, state_size, knot_points - 1>(s_r_extra, block_id, &d_r[block_x_statesize]);
+            __syncthreads();
+            blk_penta_mv<T>(s_r_tilde, s_H, s_r_extra, state_size, knot_points - 1, block_id);
+            __syncthreads();
+            T b = poly_coeff[1];
+            for (uint32_t ind = thread_id; ind < state_size; ind += block_dim) {
+                s_r_tilde[ind] = s_r_tilde[ind] * b + s_v_b[ind];
+            }
+            __syncthreads();
+        }
     }
 
     // p = r_tilde
@@ -338,12 +369,15 @@ void pcg(
         }
         __syncthreads();
 
-        if (poly_order == 1) {
+        if (poly_order > 0) {
+            // poly_order = 1, 2, ... use H
             for (uint32_t ind = thread_id; ind < state_size; ind += block_dim) {
                 // save s_r_tilde to d_r globally
                 d_r[block_x_statesize + ind] = s_r_tilde[ind];
                 // load s_r_tilde to middle part of s_r_extra locally.
                 s_r_extra[ind + state_size] = s_r_tilde[ind];
+                // store s_r_tilde to s_v_b temporarily
+                s_v_b[ind] = s_r_tilde[ind];
             }
             grid.sync();
 
@@ -351,8 +385,36 @@ void pcg(
             // load first and last part of s_r_extra from d_r (global memory).
             loadVec_m2p2<T, state_size, knot_points - 1>(s_r_extra, block_id, &d_r[block_x_statesize]);
             __syncthreads();
-            blk_penta_mv<T>(s_r_tilde, s_I_H, s_r_extra, state_size, knot_points - 1, block_id);
+            blk_penta_mv<T>(s_r_tilde, s_H, s_r_extra, state_size, knot_points - 1, block_id);
             __syncthreads();
+            T a = poly_coeff[0];
+            for (uint32_t ind = thread_id; ind < state_size; ind += block_dim) {
+                if (poly_order > 1) {
+                    // save s_r_tilde to d_r globally
+                    d_r[block_x_statesize + ind] = s_r_tilde[ind];
+                    // load s_r_tilde to middle part of s_r_extra locally.
+                    s_r_extra[ind + state_size] = s_r_tilde[ind];
+                }
+                s_r_tilde[ind] = s_r_tilde[ind] * a + s_v_b[ind];
+                if (poly_order > 1) {
+                    // store s_r_tilde to s_v_b temporarily
+                    s_v_b[ind] = s_r_tilde[ind];
+                }
+            }
+            __syncthreads();
+            if (poly_order > 1) {
+                grid.sync();
+                // load first and last part of s_r_extra from d_r (global memory).
+                loadVec_m2p2<T, state_size, knot_points - 1>(s_r_extra, block_id, &d_r[block_x_statesize]);
+                __syncthreads();
+                blk_penta_mv<T>(s_r_tilde, s_H, s_r_extra, state_size, knot_points - 1, block_id);
+                __syncthreads();
+                T b = poly_coeff[1];
+                for (uint32_t ind = thread_id; ind < state_size; ind += block_dim) {
+                    s_r_tilde[ind] = s_r_tilde[ind] * b + s_v_b[ind];
+                }
+                __syncthreads();
+            }
         }
 
         // eta = r * r_tilde

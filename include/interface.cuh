@@ -25,7 +25,7 @@ uint32_t solvePCG(
     /* Create device memory d_S, d_Pinv,
      * d_gamma, d_lambda, d_r, d_p,
      * d_v_temp, d_eta_new_temp
-     * d_I_H if applicable */
+     * d_H if applicable */
 
     T *d_S, *d_Pinv, *d_gamma, *d_lambda;
     if (config->pcg_org_trans) {
@@ -38,9 +38,9 @@ uint32_t solvePCG(
     gpuErrchk(cudaMalloc(&d_lambda, Nnx_T));
     gpuErrchk(cudaMalloc(&d_gamma, Nnx_T));
 
-    T *d_I_H;
-    if (config->pcg_poly_order == 1) {
-        gpuErrchk(cudaMalloc(&d_I_H, 3 * Nnx2_T));
+    T *d_H;
+    if (config->pcg_poly_order > 0) {
+        gpuErrchk(cudaMalloc(&d_H, 3 * Nnx2_T));
     }
 
     /*   PCG vars   */
@@ -61,14 +61,14 @@ uint32_t solvePCG(
     }
     gpuErrchk(cudaMemcpy(d_lambda, h_lambda, Nnx_T, cudaMemcpyHostToDevice));
     gpuErrchk(cudaMemcpy(d_gamma, h_gamma, Nnx_T, cudaMemcpyHostToDevice));
-    if (config->pcg_poly_order == 1) {
-        gpuErrchk(cudaMemcpy(d_I_H, h_I_H, 3 * Nnx2_T, cudaMemcpyHostToDevice));
+    if (config->pcg_poly_order > 0) {
+        gpuErrchk(cudaMemcpy(d_H, h_I_H, 3 * Nnx2_T, cudaMemcpyHostToDevice));
     }
 
     uint32_t pcg_iters = solvePCGCooperativeKernel(stateSize, knotPoints,
                                                    d_S,
                                                    d_Pinv,
-                                                   d_I_H,
+                                                   d_H,
                                                    d_gamma,
                                                    d_lambda,
                                                    d_r,
@@ -84,8 +84,8 @@ uint32_t solvePCG(
     cudaFree(d_Pinv);
     cudaFree(d_lambda);
     cudaFree(d_gamma);
-    if (config->pcg_poly_order == 1) {
-        cudaFree(d_I_H);
+    if (config->pcg_poly_order > 0) {
+        cudaFree(d_H);
     }
     cudaFree(d_r);
     cudaFree(d_v_temp);
@@ -99,7 +99,7 @@ uint32_t solvePCGCooperativeKernel(const uint32_t state_size,
                                    const uint32_t knot_points,
                                    T *d_S,
                                    T *d_Pinv,
-                                   T *d_I_H,
+                                   T *d_H,
                                    T *d_gamma,
                                    T *d_lambda,
                                    T *d_r,
@@ -111,6 +111,13 @@ uint32_t solvePCGCooperativeKernel(const uint32_t state_size,
     gpuErrchk(cudaMalloc(&d_pcg_iters, sizeof(uint32_t)));
     bool *d_pcg_exit;
     gpuErrchk(cudaMalloc(&d_pcg_exit, sizeof(bool)));
+    T *d_poly_coeff = NULL;
+    if (config->pcg_poly_order > 0) {
+        gpuErrchk(cudaMalloc(&d_poly_coeff, config->pcg_poly_order * sizeof(T)));
+        gpuErrchk(cudaMemcpy(d_poly_coeff, config->pcg_poly_coeff, config->pcg_poly_order * sizeof(T),
+                             cudaMemcpyHostToDevice));
+    }
+
 
     void *pcg_kernel = (void *) pcg<T, STATE_SIZE, KNOT_POINTS>;
 
@@ -125,7 +132,7 @@ uint32_t solvePCGCooperativeKernel(const uint32_t state_size,
     void *kernelArgs[] = {
             (void *) &d_S,
             (void *) &d_Pinv,
-            (void *) &d_I_H,
+            (void *) &d_H,
             (void *) &d_gamma,
             (void *) &d_lambda,
             (void *) &d_r,
@@ -137,7 +144,8 @@ uint32_t solvePCGCooperativeKernel(const uint32_t state_size,
             (void *) &config->pcg_max_iter,
             (void *) &config->pcg_exit_tol,
             (void *) &config->pcg_org_trans,
-            (void *) &config->pcg_poly_order
+            (void *) &config->pcg_poly_order,
+            (void *) &d_poly_coeff
     };
     uint32_t h_pcg_iters;
 

@@ -49,11 +49,9 @@ writeBlkTriDiagSymMatrixToFile(D, O, N, nx, './data/S.txt');
 [D_P, O_P, P_p0s3] = formPreconditionerSS(D, O, N, nx);
 writeBlkTriDiagSymMatrixToFile(D_P, O_P, N, nx, './data/P.txt');
 
-alpha = 1:0.5:5;
-for i=1:length(alpha)
-    [D_H, O_up2, O_down2, ~, ~] = formPolyPreconditionerH(D, O, N, nx, alpha(i));
-    writeBlkPentaDiagMatrixToFile(D_H, O_up2, O_down2, N, nx, ['./data/I_H_' num2str(i) '.txt'])
-end
+[D_H, O_up2, O_down2, H] = formPolyPreconditionerH(D, O, N, nx);
+writeBlkPentaDiagMatrixToFile(D_H, O_up2, O_down2, N, nx, './data/H.txt')
+P_p1s3 = (eye(N*nx) + H) * P_p0s3;
 
 % compute S using {\tilde{A}_k, \tilde{B}_k, \tilde{Q}_k, R_k}
 % \tilde{A}_k = T_k * A_k * inv(T_{k-1})
@@ -66,11 +64,9 @@ writeMatrixToFileDiagonal(D_til, O_til, N, nx, './data/S');
 [D_P_til, O_P_til, P_p0s3_til] = formPreconditionerSS(D_til, O_til, N, nx);
 writeMatrixToFileDiagonal(D_P_til, O_P_til, N, nx, './data/P');
 
-alpha = 1:0.5:5;
-for i=1:length(alpha)
-    [D_H_til, O_up2_til, O_down2_til, ~ ,~] = formPolyPreconditionerH(D_til, O_til, N, nx, alpha(i));
-    writeBlkPentaDiagMatrixToFile(D_H_til, O_up2_til, O_down2_til, N, nx, ['./data/I_H_tilde_' num2str(i) '.txt'])
-end
+[D_H_til, O_up2_til, O_down2_til, H_til] = formPolyPreconditionerH(D_til, O_til, N, nx);
+writeBlkPentaDiagMatrixToFile(D_H_til, O_up2_til, O_down2_til, N, nx, './data/H_tilde.txt')
+P_p1s3_til = (eye(N*nx) + H_til) * P_p0s3_til;
 
 % generate random \gamma as RHS
 gamma = rand(N*nx, 1);
@@ -79,9 +75,8 @@ writematrix(gamma, './data/gamma.txt');
 % solve S * \lambda = \gamma
 % lambda = S \ gamma;
 pcg_max_iter = 1000;
-[~, ~, ~, I_H3 ,P_p1s3] = formPolyPreconditionerH(D, O, N, nx, 1);
 [lambda_p0s3, I_p0s3]= PCG(P_p0s3, eye(N*nx), S, gamma, zeros(N*nx,1), 1e-8, pcg_max_iter);
-[lambda_p1s3, I_p1s3]= PCG(P_p0s3, I_H3, S, gamma, zeros(N*nx,1), 1e-8, pcg_max_iter);
+[lambda_p1s3, I_p1s3]= PCG(P_p0s3, eye(N*nx)+H, S, gamma, zeros(N*nx,1), 1e-8, pcg_max_iter);
 
 % prepare \tilde{\gamma} = T * \gamma
 gamma_til = zeros(N*nx, 1);
@@ -92,9 +87,8 @@ writematrix(gamma_til, './data/gamma_tilde.txt');
 
 % solve \tilde{S} * \tilde{\lambda} = \tilde{\gamma}
 % lambda_tilde = S_tilde \ gamma_tilde;
-[~, ~, ~, I_H3_til ,P_p1s3_til] = formPolyPreconditionerH(D_til, O_til, N, nx, 1);
 [lambda_p0s3_til, I_p0s3_til]= PCG(P_p0s3_til, eye(N*nx), S_til, gamma_til, zeros(N*nx,1), 1e-8, pcg_max_iter);
-[lambda_p1s3_til, I_p1s3_til]= PCG(P_p0s3_til, I_H3_til, S_til, gamma_til, zeros(N*nx,1), 1e-8, pcg_max_iter);
+[lambda_p1s3_til, I_p1s3_til]= PCG(P_p0s3_til, eye(N*nx)+H_til, S_til, gamma_til, zeros(N*nx,1), 1e-8, pcg_max_iter);
 
 % get back \lambda = T' * \tilde{\lambda}
 lambda_new = zeros(N*nx, 1);
@@ -117,12 +111,13 @@ disp(['cond(P*S) p1s3 = ', num2str(cond(P_p1s3*S)), ', cond(P_til*S_til) p1s3 = 
 disp(['PCG iterations for P*S p0s3 = ', num2str(I_p0s3), ', for P_til*S_til p0s3 = ', num2str(I_p0s3_til)])
 disp(['PCG iterations for P*S p1s3 = ', num2str(I_p1s3), ', for P_til*S_til p1s3 = ', num2str(I_p1s3_til)])
 
+alpha = 1:0.5:5;
 for i=1:length(alpha)
-    [~, ~, ~, I_H3 ,~] = formPolyPreconditionerH(D, O, N, nx, alpha(i));
-    [~, I_p1s3_a]= PCG(P_p0s3, I_H3, S, gamma, zeros(N*nx,1), 1e-8, pcg_max_iter);
+    I_H = eye(N*nx) + alpha(i)*H;
+    [~, I_p1s3_a]= PCG(P_p0s3, I_H, S, gamma, zeros(N*nx,1), 1e-8, pcg_max_iter);
     
-    [~, ~, ~, I_H3_til ,~] = formPolyPreconditionerH(D_til, O_til, N, nx, alpha(i));
-    [~, I_p1s3_a_til]= PCG(P_p0s3_til, I_H3_til, S_til, gamma_til, zeros(N*nx,1), 1e-8, pcg_max_iter);
+    I_H_til = eye(N*nx) + alpha(i)*H_til;
+    [~, I_p1s3_a_til]= PCG(P_p0s3_til, I_H_til, S_til, gamma_til, zeros(N*nx,1), 1e-8, pcg_max_iter);
     
     disp(['alpha = ',num2str(alpha(i)) ' PCG iterations for P*S p1s3 = ', num2str(I_p1s3_a) ' for P_til*S_til p1s3 = ', num2str(I_p1s3_a_til) ])
 end
@@ -272,10 +267,10 @@ function [D_H, O_up2, O_down2, I_H, P] = formPolyPreconditionerHRaw(D, O, N, nx,
     P = I_H * add;
 end
 
-function [D_H, O_up2, O_down2, I_H, P] = formPolyPreconditionerH(D, O, N, nx, alpha)
+function [D_H, O_up2, O_down2, H] = formPolyPreconditionerH(D, O, N, nx)
     % this is for split = 3
     % split = 3 -> left & right stair splitting + diagonal splitting
-    [~, O_add, add] = formPreconditionerSS(D, O, N, nx);
+    [~, O_add, ~] = formPreconditionerSS(D, O, N, nx);
     
     O_up1 = cell(1, N-1);
     O_down1 = cell(1, N-1);
@@ -286,15 +281,14 @@ function [D_H, O_up2, O_down2, I_H, P] = formPolyPreconditionerH(D, O, N, nx, al
     O_up2 = cell(1, N-2);
     O_down2 = cell(1, N-2);
     D_H = cell(1, N);
-    D_H{1} = alpha*(-O_add{1} * O{1}') + eye(nx);
-    D_H{N} = alpha*(-O_add{N-1}'* O{N-1}) + eye(nx);
+    D_H{1} = -O_add{1} * O{1}';
+    D_H{N} = -O_add{N-1}'* O{N-1};
     for i=2:N-1
-        D_H{i} = alpha*(-O_add{i} * O{i}' - O_add{i-1}'* O{i-1}) + eye(nx);
-        O_up2{i-1} = alpha*(-O_add{i-1} * O{i});
-        O_down2{i-1} = alpha*(-O_add{i}'* O{i-1}');
+        D_H{i} = -O_add{i} * O{i}' - O_add{i-1}'* O{i-1};
+        O_up2{i-1} = -O_add{i-1} * O{i};
+        O_down2{i-1} = -O_add{i}'* O{i-1}';
     end
-    I_H = composeBlockPentDiagMatrix(D_H, O_up1, O_up2, O_down1, O_down2, N, nx);
-    P = I_H * add;
+    H = composeBlockPentDiagMatrix(D_H, O_up1, O_up2, O_down1, O_down2, N, nx);
 end
 
 
