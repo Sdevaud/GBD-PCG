@@ -22,7 +22,23 @@ void readArrayFromFile(uint32_t size, const char *filename,
 
     for (uint32_t i = 0; i < size; i++) {
         int ret = fscanf(myFile, "%lf,", &matrix[i]); // for double
-//        int ret = fscanf(myFile, "%f,", &matrix[i]); // for float
+    }
+
+    fclose(myFile);
+    return;
+}
+
+void readArrayFromFile(uint32_t size, const char *filename,
+                       float *matrix) {
+    FILE *myFile;
+    myFile = fopen(filename, "r");
+    if (myFile == NULL) {
+        printf("Error Reading File\n");
+        exit(0);
+    }
+
+    for (uint32_t i = 0; i < size; i++) {
+        int ret = fscanf(myFile, "%f,", &matrix[i]); // for float
     }
 
     fclose(myFile);

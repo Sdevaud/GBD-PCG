@@ -1,5 +1,6 @@
 NVCC = nvcc
-CFLAGS = --compiler-options -Wall -O3 -I../include -I../GLASS -G
+# if need to debug with compute-sanitizer, use -G option
+CFLAGS = --compiler-options -Wall -O3 -I../include -I../GLASS
 
 examples: pcg0.exe pcg1.exe pcg2.exe pcgT0.exe pcgT1.exe pcgT2.exe
 

@@ -8,6 +8,9 @@
 #include "utils.cuh"
 #include "glass.cuh"
 
+// https://github.com/NVIDIA/cuda-samples/blob/master/Samples/0_Introduction/simpleTemplates/sharedmem.cuh
+#include "sharedmem.cuh"
+
 namespace cgrps = cooperative_groups;
 
 template<typename T>
@@ -107,7 +110,10 @@ void pcg(
     const uint32_t states_sq = state_size * state_size;
     const uint32_t Nnx = state_size * knot_points;
 
-    extern __shared__ T s_temp[];
+//    extern __shared__ T s_temp[];
+    // check the file sharedmem.cuh for details 
+    SharedMemory<T> smem;
+    T *s_temp = smem.getPointer();
     /* ---------- block shared mem declaration starts ----------*/
 
     T *s_S, *s_Pinv;                            // for ORG
