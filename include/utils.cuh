@@ -233,6 +233,63 @@ void blk_tri_mv_spa(T *s_dst,   // size = b_dim
     }
 }
 
+// r_tilde = (I + a*H + b*H^2) * r_tilde
+// only for poly_order > 0
+template<typename T, uint32_t b_dim, uint32_t max_block_id>
+__device__
+void I_H_mv(T *s_r_tilde,
+            T *s_r_extra,
+            T *s_v_b,
+            T *s_H,
+            T *d_r,
+            T *poly_coeff,
+            cgrps::grid_group grid,
+            int poly_order,
+            uint32_t block_id) {
+
+    uint32_t block_x_statesize = block_id * b_dim;
+    T scalar;
+
+    // assume poly_order is at least 1
+    int index = poly_order;
+    while (index > 0) {
+        for (uint32_t ind = threadIdx.x; ind < b_dim; ind += blockDim.x) {
+            // save s_r_tilde to d_r globally
+            d_r[block_x_statesize + ind] = s_r_tilde[ind];
+            // load s_r_tilde to middle part of s_r_extra locally.
+            s_r_extra[ind + b_dim] = s_r_tilde[ind];
+
+            if (index < poly_order) {
+                s_r_tilde[ind] = s_r_tilde[ind] * scalar + s_v_b[ind];
+            }
+
+            // store s_r_tilde to s_v_b temporarily for later addition
+            s_v_b[ind] = s_r_tilde[ind];
+        }
+        grid.sync();
+
+        // r_tilde = H * r_extra
+        // load first and last part of s_r_extra from d_r (global memory).
+        loadVec_m2p2<T, b_dim, max_block_id>(s_r_extra, block_id, &d_r[block_x_statesize]);
+        __syncthreads();
+        blk_penta_mv<T>(s_r_tilde, s_H, s_r_extra, b_dim, max_block_id, block_id);
+        __syncthreads();
+        scalar = poly_coeff[poly_order - index];
+
+        index -= 1;
+    }
+
+    for (uint32_t ind = threadIdx.x; ind < b_dim; ind += blockDim.x) {
+        // poly_order == 1   -> r_tilde = H * r_tilde,  v_b = r_tilde, scalar = a
+        // poly_order == 2   -> r_tilde = H^2 * r_tilde,  v_b = (I + a*H) * r_tilde, scalar = b
+        // poly_order == 3   -> r_tilde = H^3 * r_tilde,  v_b = (I + a*H + b*H^2) * r_tilde, scalar = c
+        // ...
+        s_r_tilde[ind] = s_r_tilde[ind] * scalar + s_v_b[ind];
+    }
+    __syncthreads();
+}
+
+// The following shall be moved to MPCGPU include
 template<typename T>
 __device__
 void gato_memcpy(T *dst, T *src, unsigned size_Ts) {
@@ -309,7 +366,6 @@ void store_block_bd(uint32_t b_dim, uint32_t m_dim, T *src, T *dst, unsigned col
     }
 }
 
-// The following shall be moved to MPCGPU include
 // by Shaohui Yang July 16
 template<typename T>
 __device__
