@@ -15,7 +15,7 @@ struct pcg_config {
 
     bool pcg_org_trans; // false -> org, true -> trans
 
-    int pcg_poly_order; // now supports poly_order = 0, 1, future may support = 2
+    int pcg_poly_order; // now supports poly_order = 0, 1, 2
     T pcg_poly_coeff[PRECOND_POLY_ORDER];
 
     pcg_config(T exit_tol = pcg_constants::DEFAULT_EPSILON<T>,

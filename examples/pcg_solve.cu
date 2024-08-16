@@ -56,10 +56,10 @@ void pcg_solve_example() {
         const char *all = file_name.c_str();
         printf("reading from file %s\n", all);
         readArrayFromFile(3 * Nnx2, all, h_H);
-        int a_length = 9;
+        int param_length = 9;
 
         if (PRECOND_POLY_ORDER == 1) {
-            for (int i = 0; i < a_length; i++) {
+            for (int i = 0; i < param_length; i++) {
                 T a = 1 + i * 0.5;
                 config.pcg_poly_coeff[0] = a;
                 printf("a = %f\n", config.pcg_poly_coeff[0]);
@@ -81,11 +81,11 @@ void pcg_solve_example() {
         }
 
         if (PRECOND_POLY_ORDER == 2) {
-            for (int i = 0; i < a_length; i++) {
+            for (int i = 0; i < param_length; i++) {
                 T a = 1 + i * 0.5;
                 config.pcg_poly_coeff[0] = a;
                 printf("a = %f\n", config.pcg_poly_coeff[0]);
-                for (int j = 0; j < a_length; j++) {
+                for (int j = 0; j < param_length; j++) {
                     T b = 1 + j * 0.5;
                     config.pcg_poly_coeff[1] = b;
                     printf("b = %f\n", config.pcg_poly_coeff[1]);
