@@ -6,12 +6,23 @@
 #include "types.cuh"
 #include "pcg.cuh"
 
+/* solvePCG is the interface function to be called from the host side (all data are declared within CPU, hence h_*)
+ * it solves the linear equation S * lambda = gamma using Preconditioned Conjugate Gradient (PCG) method
+ * h_S          -> matrix, LHS of the linear equation, symmetric positive definite block tri-diagonal
+ * h_Pinv       -> matrix, preconditioner, symmetric positive definite block tri-diagonal
+ * h_H          -> matrix, preconditioner (if applicable), block tri-diagonal
+ * h_gamma      -> vector, RHS of the linear equation
+ * h_lambda     -> vector, placeholder for the initial guess and the final result
+ * stateSize    -> integer, size of the block matrix. For OCP QP, this is nx.
+ * knotPoints   -> integer, size of block rows. For OCP QP, this is N, the horizon length.
+ * config       -> configuration of the PCG algorithm
+ */
 
 template<typename T>
 uint32_t solvePCG(
         T *h_S,
         T *h_Pinv,
-        T *h_I_H,
+        T *h_H,
         T *h_gamma,
         T *h_lambda,
         unsigned stateSize,
@@ -62,7 +73,7 @@ uint32_t solvePCG(
     gpuErrchk(cudaMemcpy(d_lambda, h_lambda, Nnx_T, cudaMemcpyHostToDevice));
     gpuErrchk(cudaMemcpy(d_gamma, h_gamma, Nnx_T, cudaMemcpyHostToDevice));
     if (config->pcg_poly_order > 0) {
-        gpuErrchk(cudaMemcpy(d_H, h_I_H, 3 * Nnx2_T, cudaMemcpyHostToDevice));
+        gpuErrchk(cudaMemcpy(d_H, h_H, 3 * Nnx2_T, cudaMemcpyHostToDevice));
     }
 
     uint32_t pcg_iters = solvePCGCooperativeKernel(stateSize, knotPoints,
@@ -93,6 +104,19 @@ uint32_t solvePCG(
     return pcg_iters;
 }
 
+/* solvePCGCooperativeKernel is the interface function to be called from the device side (all data are declared within GPU, hence d_*)
+ * it solves the linear equation S * lambda = gamma using Preconditioned Conjugate Gradient (PCG) method
+ * d_S              -> matrix, LHS of the linear equation, symmetric positive definite block tri-diagonal
+ * d_Pinv           -> matrix, preconditioner, symmetric positive definite block tri-diagonal
+ * d_H              -> matrix, preconditioner (if applicable), block tri-diagonal
+ * d_gamma          -> vector, RHS of the linear equation 
+ * d_lambda         -> vector, placeholder for the initial guess and the final result
+ * d_r              -> vector, used for storing intermediate result
+ * d_p              -> vector, used for storing intermediate result
+ * d_v_temp         -> vector, used for storing intermediate result
+ * d_eta_new_temp   -> vector, used for storing intermediate result
+ * config           -> configuration of the PCG algorithm
+ */
 
 template<typename T>
 uint32_t solvePCGCooperativeKernel(const uint32_t state_size,
@@ -162,6 +186,8 @@ uint32_t solvePCGCooperativeKernel(const uint32_t state_size,
 
     gpuErrchk(cudaFree(d_pcg_iters));
     gpuErrchk(cudaFree(d_pcg_exit));
-
+    if (config->pcg_poly_order > 0) {
+        gpuErrchk(cudaFree(d_poly_coeff));
+    }
     return h_pcg_iters;
 }
