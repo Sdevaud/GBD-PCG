@@ -2,25 +2,19 @@ NVCC = nvcc
 # if need to debug with compute-sanitizer, use -G option
 CFLAGS = --compiler-options -Wall -O3 -I../include -I../GLASS
 
-examples: pcg0.exe pcg1.exe pcg2.exe pcgT0.exe pcgT1.exe pcgT2.exe
+examples: pcg0.exe pcg1.exe pcgT0.exe pcgT1.exe
 
 pcg0.exe:
-	$(NVCC) $(CFLAGS) -DKNOT_POINTS=20 -DSTATE_SIZE=15 -DPRECOND_POLY_ORDER=0 -DPCG_TYPE=false pcg_solve.cu -o pcg0.exe
+	$(NVCC) $(CFLAGS) -DKNOT_POINTS=11 -DSTATE_SIZE=29 -DPRECOND_POLY_ORDER=0 -DPCG_TYPE=false pcg_solve.cu -o pcg0.exe
 
 pcg1.exe:
-	$(NVCC) $(CFLAGS) -DKNOT_POINTS=20 -DSTATE_SIZE=15 -DPRECOND_POLY_ORDER=1 -DPCG_TYPE=false pcg_solve.cu -o pcg1.exe
-
-pcg2.exe:
-	$(NVCC) $(CFLAGS) -DKNOT_POINTS=20 -DSTATE_SIZE=15 -DPRECOND_POLY_ORDER=2 -DPCG_TYPE=false pcg_solve.cu -o pcg2.exe
+	$(NVCC) $(CFLAGS) -DKNOT_POINTS=11 -DSTATE_SIZE=29 -DPRECOND_POLY_ORDER=1 -DPCG_TYPE=false pcg_solve.cu -o pcg1.exe
 
 pcgT0.exe:
-	$(NVCC) $(CFLAGS) -DKNOT_POINTS=20 -DSTATE_SIZE=15 -DPRECOND_POLY_ORDER=0 -DPCG_TYPE=true pcg_solve.cu -o pcgT0.exe
+	$(NVCC) $(CFLAGS) -DKNOT_POINTS=11 -DSTATE_SIZE=29 -DPRECOND_POLY_ORDER=0 -DPCG_TYPE=true pcg_solve.cu -o pcgT0.exe
 
 pcgT1.exe:
-	$(NVCC) $(CFLAGS) -DKNOT_POINTS=20 -DSTATE_SIZE=15 -DPRECOND_POLY_ORDER=1 -DPCG_TYPE=true pcg_solve.cu -o pcgT1.exe
-
-pcgT2.exe:
-	$(NVCC) $(CFLAGS) -DKNOT_POINTS=20 -DSTATE_SIZE=15 -DPRECOND_POLY_ORDER=2 -DPCG_TYPE=true pcg_solve.cu -o pcgT2.exe
+	$(NVCC) $(CFLAGS) -DKNOT_POINTS=11 -DSTATE_SIZE=29 -DPRECOND_POLY_ORDER=1 -DPCG_TYPE=true pcg_solve.cu -o pcgT1.exe
 
 clean:
-	rm -rf pcg0.exe pcg1.exe pcg2.exe pcgT0.exe pcgT1.exe pcgT2.exe
+	rm -rf pcg0.exe pcg1.exe pcgT0.exe pcgT1.exe

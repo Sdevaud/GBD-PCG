@@ -56,7 +56,7 @@ void pcg_solve_example() {
         const char *all = file_name.c_str();
         printf("reading from file %s\n", all);
         readArrayFromFile(3 * Nnx2, all, h_H);
-        int param_length = 9;
+        int param_length = 1;
 
         if (PRECOND_POLY_ORDER == 1) {
             for (int i = 0; i < param_length; i++) {
@@ -132,8 +132,8 @@ void pcg_solve_example() {
 
 int main() {
 
-    printf("pcg example in float\n");
-    pcg_solve_example<float>();
+//    printf("pcg example in float\n");
+//    pcg_solve_example<float>();
 
     printf("pcg example in double\n");
     pcg_solve_example<double>();
