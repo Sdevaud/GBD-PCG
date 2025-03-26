@@ -54,7 +54,11 @@ bool checkPcgOccupancy(void *kernel, dim3 block, uint32_t state_size, uint32_t k
                        int poly_order) {
 
     const uint32_t smem_size = pcgSharedMemSize<T>(state_size, knot_points, org_trans, poly_order);
+    printf("shared memory per block in bytes = %d\n", smem_size);
     int dev = 0;
+
+    int maxBytes = 65536; // this is 64 KB, corresponding to compute capability 7.5 (GTX 1650)
+    cudaFuncSetAttribute(kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, maxBytes);
 
     cudaDeviceProp deviceProp;
     cudaGetDeviceProperties(&deviceProp, dev);
