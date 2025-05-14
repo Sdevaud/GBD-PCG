@@ -19,6 +19,10 @@
 #define PRECOND_POLY_ORDER  1  // now supports poly_order = 0, 1, 2, bigger number will not make a huge difference
 #endif
 
+#ifndef CHOL_OR_LDL
+#define CHOL_OR_LDL false
+#endif
+
 namespace pcg_constants {
     uint32_t DEFAULT_MAX_PCG_ITER = 10000;
     template<typename T>

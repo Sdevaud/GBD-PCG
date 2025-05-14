@@ -14,6 +14,7 @@ struct pcg_config {
     dim3 pcg_block;
 
     bool pcg_org_trans; // false -> org, true -> trans
+    bool chol_or_ldl;   // false -> ldl, true -> chol
 
     int pcg_poly_order; // now supports poly_order = 0, 1, 2
     T pcg_poly_coeff[PRECOND_POLY_ORDER];
@@ -23,6 +24,7 @@ struct pcg_config {
                dim3 grid = pcg_constants::DEFAULT_GRID,
                dim3 block = pcg_constants::DEFAULT_BLOCK,
                bool org_trans = PCG_TYPE,
+               bool chol_or_ldl = CHOL_OR_LDL,
                int poly_order = PRECOND_POLY_ORDER)
             :
             pcg_exit_tol(exit_tol), pcg_max_iter(max_iter), pcg_grid(grid), pcg_block(block),
