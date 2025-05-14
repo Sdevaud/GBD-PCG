@@ -13,8 +13,8 @@
 clc
 close all
 digits(16)
-N = 20;
-nx = 15;
+N = 11;
+nx = 29;
 nu = 1;
 
 % generate a set of random {A_k, B_k}
@@ -111,7 +111,7 @@ disp(['cond(P*S) p1s3 = ', num2str(cond(P_p1s3*S)), ', cond(P_til*S_til) p1s3 = 
 disp(['PCG iterations for P*S p0s3 = ', num2str(I_p0s3), ', for P_til*S_til p0s3 = ', num2str(I_p0s3_til)])
 disp(['PCG iterations for P*S p1s3 = ', num2str(I_p1s3), ', for P_til*S_til p1s3 = ', num2str(I_p1s3_til)])
 
-alpha = 1:0.5:5;
+alpha = [];
 for i=1:length(alpha)
     I_H = eye(N*nx) + alpha(i)*H;
     [~, I_p1s3_a]= PCG(P_p0s3, I_H, S, gamma, zeros(N*nx,1), 1e-8, pcg_max_iter);
