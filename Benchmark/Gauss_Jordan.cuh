@@ -1,55 +1,43 @@
-#pragma once
 #include <iostream>
+#include <vector>
 #include <cmath>
+#include <cassert>
 
+using Matrix = std::vector<std::vector<double>>;
 
+// Fonction Gauss-Jordan pour résoudre Ax = b
+// A est une matrice carrée n x n
+// b est un vecteur n x 1
+// Retourne le vecteur solution x
+std::vector<double> gauss_jordan(Matrix A, std::vector<double> b) {
+    int n = A.size();
+    assert(b.size() == n);
 
-// Accès à l'élément A(i,j) pour tableau plat
-inline float& el(float* A, int i, int j, int n) {
-    return A[i * n + j];
-}
+    for (int i = 0; i < n; ++i) {
+        // Pivot partiel : trouver la ligne avec le plus grand pivot
+        int maxRow = i;
+        for (int k = i+1; k < n; ++k)
+            if (std::fabs(A[k][i]) > std::fabs(A[maxRow][i]))
+                maxRow = k;
 
-// Gauss-Jordan pour matrice carrée n x n
-void gaussJordan(float* A, float* b, float* x, int n) {
-    // Création de la matrice augmentée dans un tableau temporaire
-    float aug[n][n+1]; // n=6 ici, dernière colonne = b
-    for (int i = 0; i < n; i++) {
-        for (int j = 0; j < n; j++) {
-            aug[i][j] = el(A,i,j,n);
-        }
-        aug[i][n] = b[i];
-    }
+        std::swap(A[i], A[maxRow]);
+        std::swap(b[i], b[maxRow]);
 
-    // Élimination
-    for (int i = 0; i < n; i++) {
-        float pivot = aug[i][i];
-        if (fabs(pivot) < 1e-12) {
-            std::cerr << "Pivot nul → système peut-être singulier !" << std::endl;
-            exit(1);
-        }
-
-        // Normalisation de la ligne pivot
-        for (int j = 0; j <= n; j++)
-            aug[i][j] /= pivot;
+        // Normaliser la ligne pivot
+        double pivot = A[i][i];
+        assert(pivot != 0); // matrice non singulière
+        for (int j = i; j < n; ++j)
+            A[i][j] /= pivot;
+        b[i] /= pivot;
 
         // Élimination des autres lignes
-        for (int k = 0; k < n; k++) {
+        for (int k = 0; k < n; ++k) {
             if (k == i) continue;
-            float factor = aug[k][i];
-            for (int j = 0; j <= n; j++)
-                aug[k][j] -= factor * aug[i][j];
+            double factor = A[k][i];
+            for (int j = i; j < n; ++j)
+                A[k][j] -= factor * A[i][j];
+            b[k] -= factor * b[i];
         }
     }
-
-    // Récupération de la solution
-    for (int i = 0; i < n; i++)
-        x[i] = aug[i][n];
-}
-
-void matVecProduct(const float* A, const float* x, float* b, int n) {
-    for (int i = 0; i < n; i++) {
-        for (int j = 0; j < n; j++) {
-            b[i] = A[i * n + j] * x[j]; // accès à l'élément (i,j)
-        }
-    }
+  return b; // le vecteur solution x
 }
