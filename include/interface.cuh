@@ -355,9 +355,9 @@ uint32_t solvePCGCooperativeKernel(const uint32_t state_size,
       fprintf(stderr, "CUDA error: %s\n", cudaGetErrorString(err));
     }
 
-    printf("Blocs actifs par SM : %d\n", blocksPerSM);
-    printf("Shared memory par bloc : %.1f KB\n", ppcg_kernel_smem_size / 1024.0);
-    printf("Mémoire totale par SM : %.1f KB\n", (blocksPerSM * ppcg_kernel_smem_size) / 1024.0);
+    printf("Activ block per SM : %d\n", blocksPerSM);
+    printf("Shared memory per bloc : %.1f KB\n", ppcg_kernel_smem_size / 1024.0);
+    printf("total memory size per SM : %.1f KB\n", (blocksPerSM * ppcg_kernel_smem_size) / 1024.0);
     printf("Grid dimensions  : (%d, %d, %d)\n", config->pcg_grid.x, config->pcg_grid.y, config->pcg_grid.z);
     printf("Block dimensions : (%d, %d, %d)\n", config->pcg_block.x, config->pcg_block.y, config->pcg_block.z);
     printf("Threads totaux   : %d\n", config->pcg_grid.x * config->pcg_grid.y * config->pcg_grid.z *
