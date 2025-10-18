@@ -15,6 +15,14 @@ namespace cgrps = cooperative_groups;
 
 template<typename T>
 size_t pcgSharedMemSize(uint32_t state_size, uint32_t knot_points, bool org_trans, int poly_order) {
+
+    cudaDeviceProp prop;
+    cudaGetDeviceProperties(&prop, 0);
+    int ppcg_kernel_smem_size = prop.sharedMemPerMultiprocessor;
+
+    return ppcg_kernel_smem_size;
+
+
     if (org_trans) {
         // TRANS
         if (poly_order > 0) {
@@ -57,8 +65,8 @@ bool checkPcgOccupancy(void *kernel, dim3 block, uint32_t state_size, uint32_t k
     printf("[PCG] shared memory per block in bytes = %d\n", smem_size);
     int dev = 0;
 
-    int maxBytes = 65536; // this is 64 KB, corresponding to compute capability 7.5 (GTX 1650)
-    cudaFuncSetAttribute(kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, maxBytes);
+    // int maxBytes = 65536; // this is 64 KB, corresponding to compute capability 7.5 (GTX 1650)
+    cudaFuncSetAttribute(kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, smem_size);
 
     cudaDeviceProp deviceProp;
     cudaGetDeviceProperties(&deviceProp, dev);
@@ -75,11 +83,11 @@ bool checkPcgOccupancy(void *kernel, dim3 block, uint32_t state_size, uint32_t k
     gpuErrchk(cudaOccupancyMaxActiveBlocksPerMultiprocessor(&numBlocksPerSm, kernel, block.x * block.y * block.z,
                                                             smem_size));
 
-    if ((int) knot_points > numProcs * numBlocksPerSm) {
-        printf("Too many knot points ([%d]). Device supports [%d] active blocks, over [%d] SMs.\n", knot_points,
-               numProcs * numBlocksPerSm, numProcs);
-        exit(6);
-    }
+    // if ((int) knot_points > numProcs * numBlocksPerSm) {
+    //     printf("Too many knot points ([%d]). Device supports [%d] active blocks, over [%d] SMs.\n", knot_points,
+    //            numProcs * numBlocksPerSm, numProcs);
+    //     exit(6);
+    // }
 
     return true;
 }

@@ -25,8 +25,9 @@
 
 namespace pcg_constants {
     uint32_t DEFAULT_MAX_PCG_ITER = 10000;
-    template<typename T>
-    T DEFAULT_EPSILON = 1e-8;
-    dim3 DEFAULT_GRID(128);
-    dim3 DEFAULT_BLOCK(32);     // should be >= 32 because one warp contains 32 threads
+    template<typename T> T DEFAULT_EPSILON = 1e-8;
+    dim3 DEFAULT_GRID(KNOT_POINTS); // one SMBlock per knot point
+    dim3 DEFAULT_BLOCK(STATE_SIZE); // one thread per state variable
+    int sizeSM = 0;
+    int sizeBlockShared = 0;
 }
