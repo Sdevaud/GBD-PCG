@@ -3,6 +3,7 @@
 #include <iostream>
 #include "test.cuh"
 
+
 namespace cg = cooperative_groups;
 
 
@@ -113,7 +114,7 @@ void MatMul(const Matrix A, const Matrix B, Matrix C)
 
 
 // Kernel déclaré avec tailles de bloc et cluster
-//__block_size__((BLOCK_SIZE, BLOCK_SIZE, 1), (CLUSTER_DIM, CLUSTER_DIM, 1))
+__block_size__((BLOCK_SIZE, BLOCK_SIZE, 1), (CLUSTER_DIM, CLUSTER_DIM, 1))
 __global__ void matmul_cluster_kernel(const float* A, const float* B, float* C, int N) {
     // Groupe de threads du cluster (permet sync inter-blocs)
     cg::cluster_group cluster = cg::this_cluster();
@@ -122,6 +123,7 @@ __global__ void matmul_cluster_kernel(const float* A, const float* B, float* C, 
     int clusterX = cluster.block_rank() % CLUSTER_DIM;
     int clusterY = cluster.block_rank() / CLUSTER_DIM;
 
+
     // Coordonnées du cluster dans la grille totale
     int globalClusterX = blockIdx.x / CLUSTER_DIM;
     int globalClusterY = blockIdx.y / CLUSTER_DIM;
@@ -129,6 +131,8 @@ __global__ void matmul_cluster_kernel(const float* A, const float* B, float* C, 
     // Coordonnées locales dans le bloc
     int tx = threadIdx.x;
     int ty = threadIdx.y;
+
+    
 
     // Taille totale du cluster (en éléments)
     int clusterTileSize = BLOCK_SIZE * CLUSTER_DIM;
@@ -142,7 +146,7 @@ __global__ void matmul_cluster_kernel(const float* A, const float* B, float* C, 
     __shared__ __attribute__((annotate("cluster_shared"))) float tileB[BLOCK_SIZE][CLUSTER_DIM * BLOCK_SIZE];
 
     float sum = 0.0f;
-
+    
     // Boucle sur les sous-blocs à multiplier
     for (int m = 0; m < N / (BLOCK_SIZE * CLUSTER_DIM); ++m) { // correction sur les clusters
         // Chaque bloc charge une portion distincte de A et B
