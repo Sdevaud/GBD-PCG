@@ -8,6 +8,41 @@
 #include "precondition.cuh"
 
 template<typename T>
+void print_info_GPU(size_t ppcg_kernel_smem_size, void *pcg_kernel,
+                    struct pcg_config<T> *config) {
+      int blocksPerSM = 0;
+
+    // Calcul du nombre total de threads par bloc
+    int blockSize = pcg_constants::DEFAULT_BLOCK.x *
+                  pcg_constants::DEFAULT_BLOCK.y *
+                  pcg_constants::DEFAULT_BLOCK.z;
+
+    // Appel correct
+    cudaError_t err = cudaOccupancyMaxActiveBlocksPerMultiprocessor(
+      &blocksPerSM,
+      pcg_kernel,
+      blockSize,
+      ppcg_kernel_smem_size);
+
+    if (err != cudaSuccess) {
+      fprintf(stderr, "CUDA error: %s\n", cudaGetErrorString(err));
+    }
+
+    cudaDeviceProp prop;
+    cudaGetDeviceProperties(&prop, 0);
+    int numSM = prop.multiProcessorCount;
+
+    printf("Number of SM: %d\n", numSM);
+    printf("Activ block per SM : %d\n", blocksPerSM);
+    printf("Shared memory per bloc : %.1f KB\n", ppcg_kernel_smem_size / 1024.0);
+    printf("total memory size per SM : %.1f KB\n", (blocksPerSM * ppcg_kernel_smem_size) / 1024.0);
+    printf("Grid dimensions  : (%d, %d, %d)\n", config->pcg_grid.x, config->pcg_grid.y, config->pcg_grid.z);
+    printf("Block dimensions : (%d, %d, %d)\n", config->pcg_block.x, config->pcg_block.y, config->pcg_block.z);
+    printf("totals threads   : %d\n", config->pcg_grid.x * config->pcg_grid.y * config->pcg_grid.z *
+                                        config->pcg_block.x * config->pcg_block.y * config->pcg_block.z);
+}
+
+template<typename T>
 void recover_lamdba(uint32_t state_size, uint32_t knot_points,
                     T *d_T, T *d_lambda) {
 
@@ -334,41 +369,9 @@ uint32_t solvePCGCooperativeKernel(const uint32_t state_size,
     };
     uint32_t h_pcg_iters;
 
-    size_t ppcg_kernel_smem_size = pcgSharedMemSize<T>(state_size, knot_points, config->pcg_org_trans,
-                                                       config->pcg_poly_order);
+    size_t ppcg_kernel_smem_size = pcgSharedMemSize<T>(state_size, knot_points, config->pcg_org_trans, config->pcg_poly_order);
 
-   int blocksPerSM = 0;
-
-    // Calcul du nombre total de threads par bloc
-    int blockSize = pcg_constants::DEFAULT_BLOCK.x *
-                  pcg_constants::DEFAULT_BLOCK.y *
-                  pcg_constants::DEFAULT_BLOCK.z;
-
-    // Appel correct
-    cudaError_t err = cudaOccupancyMaxActiveBlocksPerMultiprocessor(
-      &blocksPerSM,
-      pcg_kernel,
-      blockSize,
-      ppcg_kernel_smem_size);
-
-    if (err != cudaSuccess) {
-      fprintf(stderr, "CUDA error: %s\n", cudaGetErrorString(err));
-    }
-
-    cudaDeviceProp prop;
-    cudaGetDeviceProperties(&prop, 0);
-    int numSM = prop.multiProcessorCount;
-
-    printf("Number of SM: %d\n", numSM);
-    printf("Activ block per SM : %d\n", blocksPerSM);
-    printf("Shared memory per bloc : %.1f KB\n", ppcg_kernel_smem_size / 1024.0);
-    printf("total memory size per SM : %.1f KB\n", (blocksPerSM * ppcg_kernel_smem_size) / 1024.0);
-    printf("Grid dimensions  : (%d, %d, %d)\n", config->pcg_grid.x, config->pcg_grid.y, config->pcg_grid.z);
-    printf("Block dimensions : (%d, %d, %d)\n", config->pcg_block.x, config->pcg_block.y, config->pcg_block.z);
-    printf("totals threads   : %d\n", config->pcg_grid.x * config->pcg_grid.y * config->pcg_grid.z *
-                                        config->pcg_block.x * config->pcg_block.y * config->pcg_block.z);
-
-
+    print_info_GPU(ppcg_kernel_smem_size, pcg_kernel, config);
 
     gpuErrchk(cudaLaunchCooperativeKernel(pcg_kernel, knot_points, pcg_constants::DEFAULT_BLOCK, kernelArgs,
                                           ppcg_kernel_smem_size));

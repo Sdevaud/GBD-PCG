@@ -60,12 +60,12 @@ bool compute_P(float* P, const float* r, float beta, int size, float tol, int k)
 }
 
 
-void Conjugate_Gradien(const float* A, const float* b, float* x0, int size, float tol = 1e-6) {
+void Conjugate_Gradien(const float* A, const float* b, float* x0, int state, int Knot_point, float tol = 1e-6) {
   if (!A || !b || !x0) {
     std::cerr << "error: A, b or x0 is nullptr\n";
     return ;
 }
-
+  int size = state * Knot_point;
   float* r  = new float[size];
   float* P  = new float[size];
   float* AP = new float[size];

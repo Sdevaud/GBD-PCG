@@ -16,25 +16,27 @@ namespace cgrps = cooperative_groups;
 template<typename T>
 size_t pcgSharedMemSize(uint32_t state_size, uint32_t knot_points, bool org_trans, int poly_order) {
 
-    cudaDeviceProp prop;
-    cudaGetDeviceProperties(&prop, 0);
-    int ppcg_kernel_smem_size = prop.sharedMemPerMultiprocessor;
+    // cudaDeviceProp prop;
+    // cudaGetDeviceProperties(&prop, 0);
+    // int ppcg_kernel_smem_size = prop.sharedMemPerMultiprocessor;
 
-    return ppcg_kernel_smem_size;
+    // return ppcg_kernel_smem_size;
+
+    size_t ppcg_kernel_smem_size(0);
 
 
     if (org_trans) {
         // TRANS
         if (poly_order > 0) {
             // poly_order = 1, 2, ... use H
-            return sizeof(T) * (4 * state_size * state_size +       // off-diagonal blocks of S & Pinv
+            ppcg_kernel_smem_size = sizeof(T) * (4 * state_size * state_size +       // off-diagonal blocks of S & Pinv
                                 3 * state_size * state_size +       // H size
                                 2 * state_size +                    // diagonal blocks of S & Pinv
                                 8 * state_size +                    // all the rest vectors
                                 max(state_size, knot_points));
         } else {
             // poly_order = 0, don't use H
-            return sizeof(T) * (4 * state_size * state_size +       // off-diagonal blocks of S & Pinv
+            ppcg_kernel_smem_size = sizeof(T) * (4 * state_size * state_size +       // off-diagonal blocks of S & Pinv
                                 2 * state_size +                    // diagonal blocks of S & Pinv
                                 6 * state_size +                    // all the rest vectors
                                 max(state_size, knot_points));
@@ -43,17 +45,19 @@ size_t pcgSharedMemSize(uint32_t state_size, uint32_t knot_points, bool org_tran
         // ORG
         if (poly_order > 0) {
             // poly_order = 1, 2, ... use H
-            return sizeof(T) * (2 * 3 * state_size * state_size +       // dense S and Pinv
+            ppcg_kernel_smem_size = sizeof(T) * (2 * 3 * state_size * state_size +       // dense S and Pinv
                                 3 * state_size * state_size +           // H size
                                 8 * state_size +
                                 max(state_size, knot_points));
         } else {
             // poly_order = 0, don't use H
-            return sizeof(T) * (2 * 3 * state_size * state_size +       // dense S and Pinv
+            ppcg_kernel_smem_size = sizeof(T) * (2 * 3 * state_size * state_size +       // dense S and Pinv
                                 6 * state_size +
                                 max(state_size, knot_points));
         }
     }
+    printf("[PCG] pcgSharedMemSize used = %zu bytes\n", ppcg_kernel_smem_size);
+    return ppcg_kernel_smem_size;
 }
 
 

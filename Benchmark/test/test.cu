@@ -280,3 +280,50 @@ void test_matmul() {
     delete[] A; delete[] B; delete[] C; delete[] C_2; delete[] C_ref;
     return;
 }
+
+__global__ void kernel_max_shared(float *out) {
+    extern __shared__ float sdata[];
+
+    int idx = threadIdx.x;
+    sdata[idx % (blockDim.x)] = (float)idx;
+
+    // Exemple de calcul fictif
+    out[blockIdx.x * blockDim.x + idx] = sdata[idx % blockDim.x] * 2.0f;
+}
+
+int main() {
+
+  cudaDeviceProp prop;
+  cudaGetDeviceProperties(&prop, 0);
+  int numSM = prop.multiProcessorCount;
+  int sizeSM = prop.sharedMemPerMultiprocessor;
+  int numthreadsPerSM = prop.maxThreadsPerMultiProcessor;
+
+  dim3 blockDim(20);
+  dim3 gridDim(numSM);
+
+  float *d_out;
+  cudaMalloc(&d_out, sizeof(float) * blockDim.x * gridDim.x);
+
+  cudaFuncSetAttribute(kernel_max_shared,
+      cudaFuncAttributeMaxDynamicSharedMemorySize,
+      sizeSM);
+
+  
+  int activeBlocksPerSM = 0;
+  cudaOccupancyMaxActiveBlocksPerMultiprocessor(
+      &activeBlocksPerSM, kernel_max_shared, blockDim.x, sizeSM);
+
+  printf("Blocs actifs par SM (occupancy) : %d\n", activeBlocksPerSM);
+  printf("Nombre de SM: %d\n", numSM);
+  printf("Taille de la mémoire partagée par SM: %d\n", sizeSM);
+  printf("numthreadsPerSM: %d\n", numthreadsPerSM);
+  printf("Lancement du kernel avec %d blocs et %d threads/bloc...\n",
+           gridDim.x, blockDim.x);
+
+  cudaDeviceSynchronize();
+
+  cudaFree(d_out);
+
+  return 0;
+}
