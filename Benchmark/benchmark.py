@@ -226,6 +226,26 @@ def read_data(data_dir="data"):
     print(f"📂 Chargé depuis {data_dir}: {n_methods} méthodes, {n_sizes} tailles de modèle")
     return filtered_results, avg, model_states_sizes, methods
 
+def compute_run(nbr_run, model_states_sizes, methods, method_paths, model_knot_point):
+  results = [[[0.0 for _ in methods] for _ in model_states_sizes] for _ in range(nbr_run)]
+
+  for run in range(nbr_run):
+    print(f"🧪 Run {run+1}/{nbr_run}")
+    for i, size in enumerate(model_states_sizes):
+      for j, method in enumerate(methods):
+        exe_path = method_paths[method]
+
+        # Commande selon le type (Python script ou binaire)
+        if exe_path.endswith(".py"):
+          cmd = f"python3 {exe_path} {size} {model_knot_point}"
+        else:
+          cmd = f"{exe_path} {size} {model_knot_point}"
+
+        print(f"→ {cmd}")
+        time_exec = run_cmd(cmd)
+        results[run][i][j] = time_exec
+
+  return results
 
 def benchmark():
   nbr_run = 50

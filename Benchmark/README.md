@@ -1,8 +1,3 @@
-Parfait 😄
-Voici **ton README complet**, au **format Markdown prêt à copier-coller**, 100 % dans le style que tu veux 👇
-
----
-
 # 🧮 Benchmark — Solvers for Ax = b
 
 This repository provides several methods to solve the linear system:
