@@ -1,9 +1,17 @@
 #include <iostream>
 #include <cmath>
 #include <random>
+#include <ctime>
 
 // Génère une matrice bloc-tridiagonale SPD (float* A)
-float* generate_spd_block_tridiagonal(int state, int horizon, unsigned int seed = 42) {
+float* generate_spd_block_tridiagonal(int state, int horizon, unsigned int seed = 0) {
+
+    if (seed == 0)
+      seed = static_cast<unsigned int>(std::time(nullptr)); // graine auto
+    std::mt19937 gen(seed);
+    std::normal_distribution<float> dist(0.0f, 1.0f);
+
+
     int N = state;       // taille des blocs
     int n = horizon;     // nombre de blocs
     int dim = N * n;     // taille totale de la matrice (dim x dim)
@@ -60,7 +68,13 @@ float* generate_spd_block_tridiagonal(int state, int horizon, unsigned int seed 
 }
 
 // Génère un vecteur b aléatoire de taille 'dim' et retourne un pointeur vers un tableau float[]
-float* generate_random_vector(int dim, unsigned int seed = 42) {
+float* generate_random_vector(int dim, unsigned int seed = 0) {
+  
+    if (seed == 0)
+      seed = static_cast<unsigned int>(std::time(nullptr)); // graine auto
+    std::mt19937 gen(seed);
+    std::normal_distribution<float> dist(0.0f, 1.0f);
+
     // Allocation dynamique
     float* b = new float[dim];
 

@@ -1,43 +1,52 @@
 #include <iostream>
-#include <vector>
 #include <cmath>
 #include <cassert>
+#include <algorithm>
 
-using Matrix = std::vector<std::vector<double>>;
-
-// Fonction Gauss-Jordan pour résoudre Ax = b
-// A est une matrice carrée n x n
-// b est un vecteur n x 1
-// Retourne le vecteur solution x
-std::vector<double> gauss_jordan(Matrix A, std::vector<double> b) {
-    int n = A.size();
-    assert(b.size() == n);
-
+// -----------------------------------------------------------------------------
+// Fonction Gauss–Jordan : résout Ax = b
+// Entrées :
+//   - A : tableau 1D de taille n*n (row-major)
+//   - b : tableau 1D de taille n
+//   - n : dimension du système
+// Sortie :
+//   - x (écrit dans b à la fin)
+// -----------------------------------------------------------------------------
+void gauss_jordan(double* A, double* b, int n)
+{
     for (int i = 0; i < n; ++i) {
-        // Pivot partiel : trouver la ligne avec le plus grand pivot
+        // --- 1. Trouver le pivot maximal pour la stabilité numérique ---
         int maxRow = i;
-        for (int k = i+1; k < n; ++k)
-            if (std::fabs(A[k][i]) > std::fabs(A[maxRow][i]))
+        double maxVal = std::fabs(A[i * n + i]);
+        for (int k = i + 1; k < n; ++k) {
+            double val = std::fabs(A[k * n + i]);
+            if (val > maxVal) {
+                maxVal = val;
                 maxRow = k;
+            }
+        }
 
-        std::swap(A[i], A[maxRow]);
-        std::swap(b[i], b[maxRow]);
+        // --- 2. Échanger les lignes i et maxRow ---
+        if (maxRow != i) {
+            for (int j = 0; j < n; ++j)
+                std::swap(A[i * n + j], A[maxRow * n + j]);
+            std::swap(b[i], b[maxRow]);
+        }
 
-        // Normaliser la ligne pivot
-        double pivot = A[i][i];
-        assert(pivot != 0); // matrice non singulière
+        // --- 3. Normaliser la ligne pivot ---
+        double pivot = A[i * n + i];
+        assert(pivot != 0.0 && "Matrice singulière !");
         for (int j = i; j < n; ++j)
-            A[i][j] /= pivot;
+            A[i * n + j] /= pivot;
         b[i] /= pivot;
 
-        // Élimination des autres lignes
+        // --- 4. Éliminer toutes les autres lignes ---
         for (int k = 0; k < n; ++k) {
             if (k == i) continue;
-            double factor = A[k][i];
+            double factor = A[k * n + i];
             for (int j = i; j < n; ++j)
-                A[k][j] -= factor * A[i][j];
+                A[k * n + j] -= factor * A[i * n + j];
             b[k] -= factor * b[i];
         }
     }
-  return b; // le vecteur solution x
 }
