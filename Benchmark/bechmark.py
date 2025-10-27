@@ -4,6 +4,7 @@ from scipy.stats import norm
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 import os
+import json
 
 
 def compile_all(method_paths):
@@ -131,6 +132,82 @@ def plot_filtered_results(filtered_results, avg, model_sizes, method_names,
 
     plt.close()
 
+def write_data(filtered_results, avg, model_states_sizes, methods, output_dir="data"):
+    """
+    Sauvegarde les données filtrées et moyennes dans un dossier (un fichier par méthode).
+    Les fichiers sont écrits en JSON pour plus de portabilité.
+    """
+    os.makedirs(output_dir, exist_ok=True)
+
+    for method_idx, method in enumerate(methods):
+        method_data = {
+            "model_states_sizes": model_states_sizes,
+            "filtered_results": [  # extrait uniquement les temps pour cette méthode
+                [run[i][method_idx] for i in range(len(model_states_sizes))]
+                for run in filtered_results
+            ],
+            "avg": [avg[i][method_idx] for i in range(len(model_states_sizes))]
+        }
+
+        file_path = os.path.join(output_dir, f"{method}.json")
+        with open(file_path, "w") as f:
+            json.dump(method_data, f, indent=2)
+
+        print(f"💾 Données sauvegardées dans {file_path}")
+
+def read_data(data_dir="data"):
+    """
+    Relit les données depuis le dossier `data/` et reconstruit les structures :
+      - filtered_results
+      - avg
+      - model_states_sizes
+      - methods
+    pour pouvoir replotter sans relancer la simulation.
+    """
+    files = [f for f in os.listdir(data_dir) if f.endswith(".json")]
+    if not files:
+        raise FileNotFoundError(f"Aucun fichier de données trouvé dans {data_dir}")
+
+    methods = []
+    model_states_sizes = None
+    filtered_results_per_method = {}
+    avg_per_method = {}
+
+    for filename in files:
+        method = os.path.splitext(filename)[0]
+        methods.append(method)
+
+        with open(os.path.join(data_dir, filename), "r") as f:
+            data = json.load(f)
+
+        if model_states_sizes is None:
+            model_states_sizes = data["model_states_sizes"]
+
+        filtered_results_per_method[method] = data["filtered_results"]
+        avg_per_method[method] = data["avg"]
+
+    # Reconstruction dans le même format que l’original :
+    nbr_run = len(next(iter(filtered_results_per_method.values())))
+    nbr_sizes = len(model_states_sizes)
+    nbr_methods = len(methods)
+
+    # filtered_results[run][i][j]
+    filtered_results = [
+        [
+            [filtered_results_per_method[methods[j]][run][i] for j in range(nbr_methods)]
+            for i in range(nbr_sizes)
+        ]
+        for run in range(nbr_run)
+    ]
+
+    avg = [
+        [avg_per_method[methods[j]][i] for j in range(nbr_methods)]
+        for i in range(nbr_sizes)
+    ]
+
+    print(f"📂 Données chargées depuis {data_dir} ({len(methods)} méthodes, {nbr_run} runs)")
+    return filtered_results, avg, model_states_sizes, methods
+
 def benchmark():
   nbr_run = 50
   model_knot_point = 50
@@ -140,7 +217,7 @@ def benchmark():
   method_paths = {
     "numpy": "linlag.py",                          # script Python
     "gradient_no_gpu": "./CG_no_GPU/benchmark_CG_no_GPU.exe" # exécutable CUDA
-}
+  }
 
   compile_all(method_paths)
 
@@ -165,9 +242,12 @@ def benchmark():
 
   # Filter and average
   filtered_results, avg = eliminate_outliers(results)
+  write_data(filtered_results, avg, model_states_sizes, methods)
+  data_filtred_result, data_avg, data_state_size, data_methods = read_data()
+
 
   # Plot results
-  plot_filtered_results(filtered_results, avg, model_states_sizes, methods, save_path="/home/sdevaud/Semester_Project/GBD-PCG/Benchmark/plots/bench.png")
+  plot_filtered_results(data_filtred_result, data_avg, data_state_size, data_methods, save_path="/home/sdevaud/Semester_Project/GBD-PCG/Benchmark/plots/bench.png")
 
 
 
