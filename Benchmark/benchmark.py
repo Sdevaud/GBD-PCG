@@ -82,6 +82,7 @@ def eliminate_outliers(results):
 
 
 def plot_filtered_results(filtered_results, avg, model_sizes, method_names,
+                          file_name,
                           save_path=None,
                           metric_name="Execution time [ms]",
                           title="Benchmark Results",
@@ -124,7 +125,7 @@ def plot_filtered_results(filtered_results, avg, model_sizes, method_names,
     if save_path is None:
         project_dir = os.path.dirname(__file__)
         plots_dir = os.path.join(project_dir, "plots")
-        save_path = os.path.join(plots_dir, "bench.png")
+        save_path = os.path.join(plots_dir, file_name)
     if save_path:
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
         plt.savefig(save_path, dpi=300)
@@ -134,32 +135,43 @@ def plot_filtered_results(filtered_results, avg, model_sizes, method_names,
 
     plt.close()
 
-def write_data(filtered_results, avg, model_states_sizes, methods, output_dir="data"):
+def write_data(filtered_results, avg, x_axis_values, methods, benchmark_name="default", base_dir="data"):
     """
-    Sauvegarde les données filtrées et moyennes dans un dossier (un fichier par méthode).
-    On suppose :
-      - filtered_results[i][j] = liste des temps (après filtrage) pour
-        model_states_sizes[i] et methods[j]
-      - avg[i][j] = moyenne (float) pour cette combinaison
+    Save filtered and averaged results in a subdirectory for each benchmark.
+
+    Parameters
+    ----------
+    filtered_results : list[list[list[float]]]
+        filtered_results[i][j] = list of runtimes (after filtering) for x_axis_values[i] and methods[j]
+    avg : list[list[float]]
+        avg[i][j] = average runtime for x_axis_values[i] and methods[j]
+    x_axis_values : list[float]
+        Values along the benchmark's varying dimension (e.g. state size or horizon)
+    methods : list[str]
+        Names of the tested methods
+    benchmark_name : str
+        Name of the benchmark (subdirectory under "data/"), e.g. "state_size" or "horizon"
+    base_dir : str
+        Root directory for all data (default: "data/")
     """
+    # Dossier de sortie spécifique à ce benchmark
+    output_dir = os.path.join(base_dir, benchmark_name)
     os.makedirs(output_dir, exist_ok=True)
 
-    n_sizes = len(model_states_sizes)
+    n_values = len(x_axis_values)
     n_methods = len(methods)
 
     for method_idx, method in enumerate(methods):
         method_data = {
-            "model_states_sizes": model_states_sizes,
+            "x_axis_values": x_axis_values,
             "method": method,
-            # pour chaque taille de modèle -> les temps filtrés (tous les runs conservés)
             "filtered_results": [
-                filtered_results[size_idx][method_idx]
-                for size_idx in range(n_sizes)
+                filtered_results[val_idx][method_idx]
+                for val_idx in range(n_values)
             ],
-            # pour chaque taille de modèle -> la moyenne
             "avg": [
-                avg[size_idx][method_idx]
-                for size_idx in range(n_sizes)
+                avg[val_idx][method_idx]
+                for val_idx in range(n_values)
             ],
         }
 
@@ -167,25 +179,36 @@ def write_data(filtered_results, avg, model_states_sizes, methods, output_dir="d
         with open(file_path, "w") as f:
             json.dump(method_data, f, indent=2)
 
-        print(f"💾 Données sauvegardées dans {file_path}")
+        print(f"💾 Saved data for method '{method}' in {file_path}")
 
-def read_data(data_dir="data"):
+
+def read_data(benchmark_name, base_dir="data"):
     """
-    Relit les fichiers JSON dans data_dir et reconstruit :
-      filtered_results[i][j]
-      avg[i][j]
-      model_states_sizes
-      methods
+    Load JSON files from a specific benchmark subdirectory and reconstruct:
+      - filtered_results[i][j]
+      - avg[i][j]
+      - x_axis_values
+      - methods
+
+    Parameters
+    ----------
+    benchmark_name : str
+        Name of the benchmark subdirectory under "data/"
+    base_dir : str
+        Root data directory (default: "data/")
     """
+    data_dir = os.path.join(base_dir, benchmark_name)
+    if not os.path.isdir(data_dir):
+        raise FileNotFoundError(f"❌ Directory not found: {data_dir}")
+
     files = [f for f in os.listdir(data_dir) if f.endswith(".json")]
     if not files:
-        raise FileNotFoundError(f"Aucun fichier .json trouvé dans {data_dir}")
+        raise FileNotFoundError(f"❌ No JSON files found in {data_dir}")
 
-    # On lit tout
     methods = []
     per_method_filtered = {}
     per_method_avg = {}
-    model_states_sizes = None
+    x_axis_values = None
 
     for filename in files:
         file_path = os.path.join(data_dir, filename)
@@ -195,63 +218,114 @@ def read_data(data_dir="data"):
         method = data["method"]
         methods.append(method)
 
-        if model_states_sizes is None:
-            model_states_sizes = data["model_states_sizes"]
+        if x_axis_values is None:
+            x_axis_values = data["x_axis_values"]
 
         per_method_filtered[method] = data["filtered_results"]
         per_method_avg[method] = data["avg"]
 
-    # On reconstruit tableaux 2D indexés [size_idx][method_idx]
-    n_sizes = len(model_states_sizes)
+    n_values = len(x_axis_values)
     n_methods = len(methods)
 
-    # filtered_results[i][j] = liste des temps filtrés (runs restants)
     filtered_results = [
-        [
-            per_method_filtered[methods[m]][size_idx]
-            for m in range(n_methods)
-        ]
-        for size_idx in range(n_sizes)
+        [per_method_filtered[methods[m]][i] for m in range(n_methods)]
+        for i in range(n_values)
     ]
 
-    # avg[i][j] = float
     avg = [
-        [
-            per_method_avg[methods[m]][size_idx]
-            for m in range(n_methods)
-        ]
-        for size_idx in range(n_sizes)
+        [per_method_avg[methods[m]][i] for m in range(n_methods)]
+        for i in range(n_values)
     ]
 
-    print(f"📂 Chargé depuis {data_dir}: {n_methods} méthodes, {n_sizes} tailles de modèle")
-    return filtered_results, avg, model_states_sizes, methods
+    print(f"📂 Loaded benchmark '{benchmark_name}' ({n_methods} methods, {n_values} points)")
+    return filtered_results, avg, x_axis_values, methods
 
-def compute_run(nbr_run, model_states_sizes, methods, method_paths, model_knot_point):
-  results = [[[0.0 for _ in methods] for _ in model_states_sizes] for _ in range(nbr_run)]
+def compute_run(nbr_run, model_states_sizes, methods, method_paths, model_knot_points):
+    """
+    Run benchmarks over multiple state sizes and/or knot points.
 
-  for run in range(nbr_run):
-    print(f"🧪 Run {run+1}/{nbr_run}")
-    for i, size in enumerate(model_states_sizes):
-      for j, method in enumerate(methods):
-        exe_path = method_paths[method]
+    Parameters
+    ----------
+    nbr_run : int
+        Number of repetitions for averaging.
+    model_states_sizes : list[int]
+        List of model state sizes (can be length 1).
+    methods : list[str]
+        Solver methods to benchmark.
+    method_paths : dict[str, str]
+        Mapping of method names to their executable/script paths.
+    model_knot_points : list[int]
+        List of knot points (can be length 1).
 
-        # Commande selon le type (Python script ou binaire)
-        if exe_path.endswith(".py"):
-          cmd = f"python3 {exe_path} {size} {model_knot_point}"
-        else:
-          cmd = f"{exe_path} {size} {model_knot_point}"
+    Returns
+    -------
+    results : list[list[list[float]]]
+        results[run][i][j] = execution time for run, (state_size, knot_point) index i, and method j.
+    """
+    # Vérification de compatibilité des tailles
+    if len(model_states_sizes) > 1 and len(model_knot_points) > 1 and len(model_states_sizes) != len(model_knot_points):
+        raise ValueError(
+            "❌ model_states_sizes and model_knot_points must have the same length, "
+            "or one of them must be of length 1."
+        )
 
-        print(f"→ {cmd}")
-        time_exec = run_cmd(cmd)
-        results[run][i][j] = time_exec
+    # Déterminer la taille effective (celle qui varie)
+    n_points = max(len(model_states_sizes), len(model_knot_points))
 
-  return results
+    # Étendre les listes pour avoir la même taille
+    if len(model_states_sizes) == 1:
+        model_states_sizes = model_states_sizes * n_points
+    if len(model_knot_points) == 1:
+        model_knot_points = model_knot_points * n_points
 
+    # Crée la structure des résultats
+    results = [[[0.0 for _ in methods] for _ in range(n_points)] for _ in range(nbr_run)]
+
+    for run in range(nbr_run):
+        print(f"🧪 Run {run+1}/{nbr_run}")
+        for i in range(n_points):
+            size = model_states_sizes[i]
+            knot_point = model_knot_points[i]
+
+            for j, method in enumerate(methods):
+                exe_path = method_paths[method]
+
+                # Commande selon le type (Python script ou binaire)
+                if exe_path.endswith(".py"):
+                    cmd = f"python3 {exe_path} {size} {knot_point}"
+                else:
+                    cmd = f"{exe_path} {size} {knot_point}"
+
+                print(f"→ {cmd}")
+                time_exec = run_cmd(cmd)
+                results[run][i][j] = time_exec
+
+    return results
+
+
+def save_data_plot(nbr_run, model_states_sizes, methods, method_paths, model_knot_point, file_name):
+  # results[run][model_size][method]
+  results = compute_run(nbr_run, model_states_sizes, methods, method_paths, model_knot_point)
+
+  # Filter and average
+  filtered_results, avg = eliminate_outliers(results)
+
+  # write data and read data
+  if len(model_states_sizes) == 1:
+    sizes = model_knot_point
+  if len(model_knot_point) == 1:
+    sizes = model_states_sizes
+
+  write_data(filtered_results, avg, sizes, methods, file_name)
+  data_filtred_result, data_avg, data_size, data_methods = read_data(file_name)
+
+  # Plot results
+  plot_filtered_results(data_filtred_result, data_avg, data_size, data_methods, file_name + ".png")
+   
 def benchmark():
-  nbr_run = 50
-  model_knot_point = 50
-  model_states_sizes = [10*i+1 for i in range(0, 6)] # 1, 11, 21, 31, 41, 51
+
   #methods = ["gauss_jordan", "numpy", "gradient_no_gpu", "gpu_old", "gpu_new"]
+  nbr_run = 50
   methods = ["numpy", "gradient_no_gpu"]
   method_paths = {
     "numpy": "linlag.py",                          # script Python
@@ -260,35 +334,15 @@ def benchmark():
 
   compile_all(method_paths)
 
-  # results[run][model_size][method]
-  results = [[[0.0 for _ in methods] for _ in model_states_sizes] for _ in range(nbr_run)]
+  # first run states_sizes
+  model_knot_point = [50]
+  model_states_sizes = [10*i+1 for i in range(0, 6)] # 1, 11, 21, 31, 41, 51
+  save_data_plot(nbr_run, model_states_sizes, methods, method_paths, model_knot_point, "state")
 
-  for run in range(nbr_run):
-      print(f"🧪 Run {run+1}/{nbr_run}")
-      for i, size in enumerate(model_states_sizes):
-          for j, method in enumerate(methods):
-              exe_path = method_paths[method]
-
-              # Commande selon le type (Python script ou binaire)
-              if exe_path.endswith(".py"):
-                  cmd = f"python3 {exe_path} {size} {model_knot_point}"
-              else:
-                  cmd = f"{exe_path} {size} {model_knot_point}"
-
-              print(f"→ {cmd}")
-              time_exec = run_cmd(cmd)
-              results[run][i][j] = time_exec
-
-  # Filter and average
-  filtered_results, avg = eliminate_outliers(results)
-
-  # write data and read data
-  write_data(filtered_results, avg, model_states_sizes, methods)
-  data_filtred_result, data_avg, data_state_size, data_methods = read_data()
-
-
-  # Plot results
-  plot_filtered_results(data_filtred_result, data_avg, data_state_size, data_methods)
+  # second run knot_point
+  model_knot_point = [20*i+1 for i in range(0, 6)] # 1, 21, 41, 61, 81, 101
+  model_states_sizes = [30]
+  save_data_plot(nbr_run, model_states_sizes, methods, method_paths, model_knot_point, "horizon")
 
 
 def benchmark_only_plot() :
