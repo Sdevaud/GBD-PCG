@@ -278,5 +278,5 @@ def benchmark_only_plot() :
 
 
 if __name__ == "__main__":
-  # benchmark()
-  benchmark_only_plot()
+  benchmark()
+  # benchmark_only_plot()
