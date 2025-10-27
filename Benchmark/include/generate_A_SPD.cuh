@@ -21,10 +21,6 @@ float* generate_spd_block_tridiagonal(int state, int horizon, unsigned int seed 
     for (int i = 0; i < dim * dim; ++i)
         A[i] = 0.0f;
 
-    // Générateur aléatoire
-    std::mt19937 gen(seed);
-    std::normal_distribution<float> dist(0.0f, 1.0f);
-
     // Construction bloc par bloc
     for (int k = 0; k < n; ++k) {
         // ---- Bloc diagonal D_k ----
@@ -77,10 +73,6 @@ float* generate_random_vector(int dim, unsigned int seed = 0) {
 
     // Allocation dynamique
     float* b = new float[dim];
-
-    // Générateur pseudo-aléatoire
-    std::mt19937 gen(seed);                     // moteur Mersenne Twister
-    std::normal_distribution<float> dist(0.0f, 1.0f);  // distribution normale (moyenne=0, écart-type=1)
 
     // Remplissage du vecteur
     for (int i = 0; i < dim; ++i) {

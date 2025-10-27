@@ -8,41 +8,39 @@ import json
 
 
 def compile_all(method_paths):
-    """
-    Compile automatiquement tous les dossiers CUDA présents dans method_paths.
+  """
+  Automatically compiles all CUDA directories listed in method_paths.
 
-    Parameters
-    ----------
-    method_paths : dict
-        Dictionnaire {nom_methode: chemin}
-        où chemin peut être un script Python (.py) ou un exécutable CUDA (.exe)
-    """
-    compiled = []
+  Parameters
+  ----------
+  method_paths : dict
+      Dictionary {method_name: path}
+      where path can be either a Python script (.py) or a CUDA executable (.exe)
+  """
+  compiled = []
 
-    for method, path in method_paths.items():
-        # Si c’est un script Python, on ne compile pas
-        if path.endswith(".py"):
-            print(f"🟢 Méthode '{method}' (Python) — pas de compilation nécessaire.")
-            continue
+  for method, path in method_paths.items():
+    # script python
+    if path.endswith(".py"):
+      print(f"🟢 Python '{method}' no compilation")
+      continue
 
-        # Si c’est un exécutable CUDA dans un dossier (ex: ./CG_no_GPU/CG_no_GPU.exe)
-        dir_path = os.path.dirname(path)
-        if not dir_path:
-            print(f"⚠️ Impossible de déterminer le dossier pour {path}")
-            continue
+    # script CUDA
+    dir_path = os.path.dirname(path)
+    if not dir_path:
+        print(f"⚠️ Path error {path}")
+        continue
 
-        print(f"🔧 Compilation du code CUDA pour '{method}' dans {dir_path} ...")
+    print(f"🔧 CUDA compilation '{method}' in {dir_path} ...")
 
-        try:
-            subprocess.run(["make", "-C", dir_path], check=True)
-            compiled.append(dir_path)
-        except subprocess.CalledProcessError:
-            print(f"❌ Erreur lors de la compilation de {dir_path}")
+    try:
+        subprocess.run(["make", "-C", dir_path], check=True)
+        compiled.append(dir_path)
+    except subprocess.CalledProcessError:
+        print(f"❌ Error in compilation of : {dir_path}")
 
-    if compiled:
-        print(f"✅ Compilation terminée pour : {', '.join(compiled)}\n")
-    else:
-        print("🟢 Aucune compilation CUDA nécessaire.\n")
+  if compiled:
+    print(f"✅ end of compilation : {', '.join(compiled)}\n")
 
 def run_cmd(cmd):
   """Execute command Shell and return the execution time as float."""
@@ -135,18 +133,30 @@ def plot_filtered_results(filtered_results, avg, model_sizes, method_names,
 def write_data(filtered_results, avg, model_states_sizes, methods, output_dir="data"):
     """
     Sauvegarde les données filtrées et moyennes dans un dossier (un fichier par méthode).
-    Les fichiers sont écrits en JSON pour plus de portabilité.
+    On suppose :
+      - filtered_results[i][j] = liste des temps (après filtrage) pour
+        model_states_sizes[i] et methods[j]
+      - avg[i][j] = moyenne (float) pour cette combinaison
     """
     os.makedirs(output_dir, exist_ok=True)
+
+    n_sizes = len(model_states_sizes)
+    n_methods = len(methods)
 
     for method_idx, method in enumerate(methods):
         method_data = {
             "model_states_sizes": model_states_sizes,
-            "filtered_results": [  # extrait uniquement les temps pour cette méthode
-                [run[i][method_idx] for i in range(len(model_states_sizes))]
-                for run in filtered_results
+            "method": method,
+            # pour chaque taille de modèle -> les temps filtrés (tous les runs conservés)
+            "filtered_results": [
+                filtered_results[size_idx][method_idx]
+                for size_idx in range(n_sizes)
             ],
-            "avg": [avg[i][method_idx] for i in range(len(model_states_sizes))]
+            # pour chaque taille de modèle -> la moyenne
+            "avg": [
+                avg[size_idx][method_idx]
+                for size_idx in range(n_sizes)
+            ],
         }
 
         file_path = os.path.join(output_dir, f"{method}.json")
@@ -157,56 +167,61 @@ def write_data(filtered_results, avg, model_states_sizes, methods, output_dir="d
 
 def read_data(data_dir="data"):
     """
-    Relit les données depuis le dossier `data/` et reconstruit les structures :
-      - filtered_results
-      - avg
-      - model_states_sizes
-      - methods
-    pour pouvoir replotter sans relancer la simulation.
+    Relit les fichiers JSON dans data_dir et reconstruit :
+      filtered_results[i][j]
+      avg[i][j]
+      model_states_sizes
+      methods
     """
     files = [f for f in os.listdir(data_dir) if f.endswith(".json")]
     if not files:
-        raise FileNotFoundError(f"Aucun fichier de données trouvé dans {data_dir}")
+        raise FileNotFoundError(f"Aucun fichier .json trouvé dans {data_dir}")
 
+    # On lit tout
     methods = []
+    per_method_filtered = {}
+    per_method_avg = {}
     model_states_sizes = None
-    filtered_results_per_method = {}
-    avg_per_method = {}
 
     for filename in files:
-        method = os.path.splitext(filename)[0]
-        methods.append(method)
-
-        with open(os.path.join(data_dir, filename), "r") as f:
+        file_path = os.path.join(data_dir, filename)
+        with open(file_path, "r") as f:
             data = json.load(f)
+
+        method = data["method"]
+        methods.append(method)
 
         if model_states_sizes is None:
             model_states_sizes = data["model_states_sizes"]
 
-        filtered_results_per_method[method] = data["filtered_results"]
-        avg_per_method[method] = data["avg"]
+        per_method_filtered[method] = data["filtered_results"]
+        per_method_avg[method] = data["avg"]
 
-    # Reconstruction dans le même format que l’original :
-    nbr_run = len(next(iter(filtered_results_per_method.values())))
-    nbr_sizes = len(model_states_sizes)
-    nbr_methods = len(methods)
+    # On reconstruit tableaux 2D indexés [size_idx][method_idx]
+    n_sizes = len(model_states_sizes)
+    n_methods = len(methods)
 
-    # filtered_results[run][i][j]
+    # filtered_results[i][j] = liste des temps filtrés (runs restants)
     filtered_results = [
         [
-            [filtered_results_per_method[methods[j]][run][i] for j in range(nbr_methods)]
-            for i in range(nbr_sizes)
+            per_method_filtered[methods[m]][size_idx]
+            for m in range(n_methods)
         ]
-        for run in range(nbr_run)
+        for size_idx in range(n_sizes)
     ]
 
+    # avg[i][j] = float
     avg = [
-        [avg_per_method[methods[j]][i] for j in range(nbr_methods)]
-        for i in range(nbr_sizes)
+        [
+            per_method_avg[methods[m]][size_idx]
+            for m in range(n_methods)
+        ]
+        for size_idx in range(n_sizes)
     ]
 
-    print(f"📂 Données chargées depuis {data_dir} ({len(methods)} méthodes, {nbr_run} runs)")
+    print(f"📂 Chargé depuis {data_dir}: {n_methods} méthodes, {n_sizes} tailles de modèle")
     return filtered_results, avg, model_states_sizes, methods
+
 
 def benchmark():
   nbr_run = 50
@@ -242,6 +257,8 @@ def benchmark():
 
   # Filter and average
   filtered_results, avg = eliminate_outliers(results)
+
+  # write data and read data
   write_data(filtered_results, avg, model_states_sizes, methods)
   data_filtred_result, data_avg, data_state_size, data_methods = read_data()
 
