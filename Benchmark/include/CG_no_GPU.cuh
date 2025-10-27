@@ -1,7 +1,7 @@
 #include <iostream>
 #include <cmath>
 
-void initilisation(const float* A, const float* b, float* r, float* P, const float* x0, int size) {
+void initilisation(const double* A, const double* b, double* r, double* P, const double* x0, int size) {
   for(int i = 0; i < size; ++i) {
     r[i] = 0.0;
     for(int j = 0; j < size; ++j) {
@@ -12,10 +12,10 @@ void initilisation(const float* A, const float* b, float* r, float* P, const flo
   }
 }
 
-float compute_alpha(const float* A, const float* P, float* AP, 
-  const float* r, int size, int k, float& alpha_num) {
+double compute_alpha(const double* A, const double* P, double* AP, 
+  const double* r, int size, int k, double& alpha_num) {
 
-  float  alpha_denom = 0.0f;
+  double  alpha_denom = 0.0f;
 
   for (int i = 0; i < size; ++i) {
     AP[i] = 0.0f;
@@ -31,10 +31,10 @@ float compute_alpha(const float* A, const float* P, float* AP,
   return alpha_num / alpha_denom;
 }
 
-float compute_beta(const float* P, const float* AP, 
-  float* r, float* x, int size, float& alpha_num, float alpha) {
+double compute_beta(const double* P, const double* AP, 
+  double* r, double* x, int size, double& alpha_num, double alpha) {
 
-  float old_alpha_num = alpha_num;
+  double old_alpha_num = alpha_num;
   alpha_num = 0.0f;
 
   for (int i = 0; i < size; ++i) {
@@ -48,7 +48,7 @@ float compute_beta(const float* P, const float* AP,
   return alpha_num / old_alpha_num;
 }
 
-bool compute_P(float* P, const float* r, float beta, int size, float tol, int k){
+bool compute_P(double* P, const double* r, double beta, int size, double tol, int k){
   bool stay_condition = false;
   for(int i = 0; i < size; ++i) {
     P[i] = -r[i] + beta * P[i];
@@ -60,18 +60,18 @@ bool compute_P(float* P, const float* r, float beta, int size, float tol, int k)
 }
 
 
-void Conjugate_Gradien(const float* A, const float* b, float* x0, int state, int Knot_point, float tol = 1e-6) {
+void Conjugate_Gradien(const double* A, const double* b, double* x0, int state, int Knot_point, double tol = 1e-6) {
   if (!A || !b || !x0) {
     std::cerr << "error: A, b or x0 is nullptr\n";
     return ;
 }
   int size = state * Knot_point;
-  float* r  = new float[size];
-  float* P  = new float[size];
-  float* AP = new float[size];
+  double* r  = new double[size];
+  double* P  = new double[size];
+  double* AP = new double[size];
   initilisation(A, b, r, P, x0, size);
   int k = 0;
-  float alpha_num = 0.0f, alpha = 0.0f, beta = 0.0f;
+  double alpha_num = 0.0f, alpha = 0.0f, beta = 0.0f;
   bool stay_condition = true;
   
 

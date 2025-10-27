@@ -2,8 +2,9 @@
 #include <stdlib.h>
 #include <cmath> 
 #include <chrono>
-#include "CG_no_GPU.cuh"
+#include "Gauss_Jordan.cuh"
 #include "generate_A_SPD.cuh"
+
 
 int main(int argc, char* argv[]) {
     // Vérifie les arguments
@@ -20,16 +21,11 @@ int main(int argc, char* argv[]) {
     // Génération des matrices
     double* A = generate_spd_block_tridiagonal(state, horizon);
     double* B = generate_random_vector(state * horizon);
-    double* C = (double*)malloc(N * sizeof(double));
-
-    // Initialisation de C
-    for (int i = 0; i < N; ++i)
-        C[i] = 0.0;
 
     // --- Début du chronométrage ---
     auto start = std::chrono::high_resolution_clock::now();
 
-    Conjugate_Gradien(A, B, C, state, horizon);
+    gauss_jordan(A, B, state * horizon);
 
     auto end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double, std::milli> exec_time = end - start;
@@ -42,7 +38,6 @@ int main(int argc, char* argv[]) {
     // Libération mémoire
     free(A);
     free(B);
-    free(C);
 
     return 0;
 }

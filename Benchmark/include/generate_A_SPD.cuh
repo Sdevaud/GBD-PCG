@@ -3,13 +3,13 @@
 #include <random>
 #include <ctime>
 
-// Génère une matrice bloc-tridiagonale SPD (float* A)
-float* generate_spd_block_tridiagonal(int state, int horizon, unsigned int seed = 0) {
+// Génère une matrice bloc-tridiagonale SPD (double* A)
+double* generate_spd_block_tridiagonal(int state, int horizon, unsigned int seed = 0) {
 
     if (seed == 0)
       seed = static_cast<unsigned int>(std::time(nullptr)); // graine auto
     std::mt19937 gen(seed);
-    std::normal_distribution<float> dist(0.0f, 1.0f);
+    std::normal_distribution<double> dist(0.0f, 1.0f);
 
 
     int N = state;       // taille des blocs
@@ -17,21 +17,21 @@ float* generate_spd_block_tridiagonal(int state, int horizon, unsigned int seed 
     int dim = N * n;     // taille totale de la matrice (dim x dim)
 
     // Allocation mémoire (1D)
-    float* A = new float[dim * dim];
+    double* A = new double[dim * dim];
     for (int i = 0; i < dim * dim; ++i)
         A[i] = 0.0f;
 
     // Construction bloc par bloc
     for (int k = 0; k < n; ++k) {
         // ---- Bloc diagonal D_k ----
-        std::vector<float> R(N * N);
+        std::vector<double> R(N * N);
         for (int i = 0; i < N * N; ++i)
             R[i] = dist(gen);
 
         // D_k = R^T * R + N * I
         for (int i = 0; i < N; ++i) {
             for (int j = 0; j < N; ++j) {
-                float sum = 0.0f;
+                double sum = 0.0f;
                 for (int t = 0; t < N; ++t)
                     sum += R[t * N + i] * R[t * N + j]; // R^T * R
                 if (i == j)
@@ -42,7 +42,7 @@ float* generate_spd_block_tridiagonal(int state, int horizon, unsigned int seed 
 
         // ---- Bloc hors-diagonal O_k ----
         if (k < n - 1) {
-            std::vector<float> O(N * N);
+            std::vector<double> O(N * N);
             for (int i = 0; i < N * N; ++i)
                 O[i] = 0.1f * dist(gen); // petite magnitude
 
@@ -63,16 +63,16 @@ float* generate_spd_block_tridiagonal(int state, int horizon, unsigned int seed 
     return A; // pointeur sur la matrice 1D (à libérer avec delete[])
 }
 
-// Génère un vecteur b aléatoire de taille 'dim' et retourne un pointeur vers un tableau float[]
-float* generate_random_vector(int dim, unsigned int seed = 0) {
+// Génère un vecteur b aléatoire de taille 'dim' et retourne un pointeur vers un tableau double[]
+double* generate_random_vector(int dim, unsigned int seed = 0) {
   
     if (seed == 0)
       seed = static_cast<unsigned int>(std::time(nullptr)); // graine auto
     std::mt19937 gen(seed);
-    std::normal_distribution<float> dist(0.0f, 1.0f);
+    std::normal_distribution<double> dist(0.0f, 1.0f);
 
     // Allocation dynamique
-    float* b = new float[dim];
+    double* b = new double[dim];
 
     // Remplissage du vecteur
     for (int i = 0; i < dim; ++i) {

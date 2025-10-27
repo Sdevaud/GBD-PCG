@@ -326,10 +326,11 @@ def benchmark():
 
   #methods = ["gauss_jordan", "numpy", "gradient_no_gpu", "gpu_old", "gpu_new"]
   nbr_run = 50
-  methods = ["numpy", "gradient_no_gpu"]
+  methods = ["numpy", "gradient_no_gpu", "gauss_jordan"]
   method_paths = {
     "numpy": "linlag.py",                          # script Python
-    "gradient_no_gpu": "./CG_no_GPU/benchmark_CG_no_GPU.exe" # exécutable CUDA
+    "gradient_no_gpu": "./CG_no_GPU/benchmark_CG_no_GPU.exe", # exécutable CUDA
+    "gauss_jordan" : "./Gauss_Jordan/benchmark_gauss_jordan.exe"
   }
 
   compile_all(method_paths)

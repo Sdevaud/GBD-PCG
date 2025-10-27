@@ -15,7 +15,6 @@
 void gauss_jordan(double* A, double* b, int n)
 {
     for (int i = 0; i < n; ++i) {
-        // --- 1. Trouver le pivot maximal pour la stabilité numérique ---
         int maxRow = i;
         double maxVal = std::fabs(A[i * n + i]);
         for (int k = i + 1; k < n; ++k) {
@@ -26,21 +25,18 @@ void gauss_jordan(double* A, double* b, int n)
             }
         }
 
-        // --- 2. Échanger les lignes i et maxRow ---
         if (maxRow != i) {
             for (int j = 0; j < n; ++j)
                 std::swap(A[i * n + j], A[maxRow * n + j]);
             std::swap(b[i], b[maxRow]);
         }
 
-        // --- 3. Normaliser la ligne pivot ---
         double pivot = A[i * n + i];
         assert(pivot != 0.0 && "Matrice singulière !");
         for (int j = i; j < n; ++j)
             A[i * n + j] /= pivot;
         b[i] /= pivot;
 
-        // --- 4. Éliminer toutes les autres lignes ---
         for (int k = 0; k < n; ++k) {
             if (k == i) continue;
             double factor = A[k * n + i];
