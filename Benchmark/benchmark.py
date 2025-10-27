@@ -121,6 +121,10 @@ def plot_filtered_results(filtered_results, avg, model_sizes, method_names,
     plt.grid(True, which="both", ls="--", alpha=0.5)
     plt.tight_layout()
 
+    if save_path is None:
+        project_dir = os.path.dirname(__file__)
+        plots_dir = os.path.join(project_dir, "plots")
+        save_path = os.path.join(plots_dir, "bench.png")
     if save_path:
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
         plt.savefig(save_path, dpi=300)
@@ -264,10 +268,15 @@ def benchmark():
 
 
   # Plot results
-  plot_filtered_results(data_filtred_result, data_avg, data_state_size, data_methods, save_path="/home/sdevaud/Semester_Project/GBD-PCG/Benchmark/plots/bench.png")
+  plot_filtered_results(data_filtred_result, data_avg, data_state_size, data_methods)
 
+
+def benchmark_only_plot() :
+  data_filtred_result, data_avg, data_state_size, data_methods = read_data()
+  plot_filtered_results(data_filtred_result, data_avg, data_state_size, data_methods)
 
 
 
 if __name__ == "__main__":
-  benchmark()
+  # benchmark()
+  benchmark_only_plot()
