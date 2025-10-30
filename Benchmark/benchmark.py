@@ -347,11 +347,14 @@ def benchmark():
 
 
 def benchmark_only_plot() :
-  data_filtred_result, data_avg, data_state_size, data_methods = read_data()
-  plot_filtered_results(data_filtred_result, data_avg, data_state_size, data_methods)
+  data_filtred_result, data_avg, data_size, data_methods = read_data("state")
+  plot_filtered_results(data_filtred_result, data_avg, data_size, data_methods, "state" + ".png")
+
+  data_filtred_result, data_avg, data_size, data_methods = read_data("state")
+  plot_filtered_results(data_filtred_result, data_avg, data_size, data_methods, "horizon" + ".png")
 
 
 
 if __name__ == "__main__":
-  benchmark()
-  # benchmark_only_plot()
+  # benchmark()
+  benchmark_only_plot()
