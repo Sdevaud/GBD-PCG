@@ -23,7 +23,7 @@ template<typename T>
 bool checkPreconditionOccupancy(void *kernel, dim3 block, uint32_t state_size, uint32_t knot_points) {
 
     const uint32_t smem_size = preconditionSharedMemSize<T>(state_size);
-    printf("[Precondition] shared memory per block in bytes = %d\n", smem_size);
+    // printf("[Precondition] shared memory per block in bytes = %d\n", smem_size);
     int dev = 0;
 
     int maxBytes = 65536; // this is 64 KB, corresponding to compute capability 7.5 (GTX 1650)

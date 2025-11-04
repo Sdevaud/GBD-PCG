@@ -56,7 +56,7 @@ size_t pcgSharedMemSize(uint32_t state_size, uint32_t knot_points, bool org_tran
                                 max(state_size, knot_points));
         }
     }
-    printf("[PCG] pcgSharedMemSize used = %zu bytes\n", ppcg_kernel_smem_size);
+    // printf("[PCG] pcgSharedMemSize used = %zu bytes\n", ppcg_kernel_smem_size);
     return ppcg_kernel_smem_size;
 }
 
@@ -66,7 +66,7 @@ bool checkPcgOccupancy(void *kernel, dim3 block, uint32_t state_size, uint32_t k
                        int poly_order) {
 
     const uint32_t smem_size = pcgSharedMemSize<T>(state_size, knot_points, org_trans, poly_order);
-    printf("[PCG] shared memory per block in bytes = %d\n", smem_size);
+    // printf("[PCG] shared memory per block in bytes = %d\n", smem_size);
     int dev = 0;
 
     // int maxBytes = 65536; // this is 64 KB, corresponding to compute capability 7.5 (GTX 1650)

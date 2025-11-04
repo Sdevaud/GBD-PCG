@@ -1,68 +1,109 @@
 #include <iostream>
 #include <cooperative_groups.h>
+#include "affichage.cuh"
+#include "generate_A_SPD.cuh"
 using namespace cooperative_groups;
 
-
-__global__ __cluster_dims__(2, 1, 1)
-void clusterSharedDemo() {
-    extern __shared__ float cluster_smem[];
-    cluster_group cluster = this_cluster();
-    int total = cluster.dim_blocks().x * blockDim.x;
-    int global_idx = cluster.block_rank() * blockDim.x + threadIdx.x;
-
-    cluster_smem[global_idx] = (float)global_idx;
-    cluster.sync();
-
-    if (cluster.block_rank() == 0 && threadIdx.x == 0) {
-        printf("Cluster shared memory active, total threads: %d\n", total);
+void readArrayFromFile(uint32_t size, const char *filename,
+                       double *matrix) {
+    FILE *myFile;
+    myFile = fopen(filename, "r");
+    if (myFile == NULL) {
+        printf("Error Reading File\n");
+        exit(0);
     }
+
+    for (uint32_t i = 0; i < size; i++) {
+        int ret = fscanf(myFile, "%lf,", &matrix[i]); // for double
+    }
+
+    fclose(myFile);
+    return;
+}
+
+void readArrayFromFile(uint32_t size, const char *filename,
+                       float *matrix) {
+    FILE *myFile;
+    myFile = fopen(filename, "r");
+    if (myFile == NULL) {
+        printf("Error Reading File\n");
+        exit(0);
+    }
+
+    for (uint32_t i = 0; i < size; i++) {
+        int ret = fscanf(myFile, "%f,", &matrix[i]); // for float
+    }
+
+    fclose(myFile);
+    return;
+}
+
+template<typename T>
+void test() {
+  int state_size = 3;
+  int knot_points = 3;
+  const int Nnx2 = knot_points * state_size * state_size;
+  const int Nnx = state_size * knot_points;
+  // T h_gamma[Nnx];
+  // T *h_S;
+  // h_S = new T[3 * Nnx2];
+  // std::string file_name;
+  // readArrayFromFile(3 * Nnx2, "data/S.txt", h_S);
+  // readArrayFromFile(Nnx, "data/gamma.txt", h_gamma);
+
+  T* h_S = generate_spd_block_tridiagonal<T>(state_size, knot_points, 5);
+  T* h_gamma = generate_random_vector<T>(Nnx);
+  printVector<T>("b", h_gamma, Nnx);
+  printMatrix<T>("S", h_S, Nnx);
+  printVector<T>("S", h_S, Nnx*Nnx);
 }
 
 int main() {
-    int dev = 0;
-    cudaSetDevice(dev);
-
-    int maxClusterSmem = 0;
-    cudaDeviceGetAttribute(&maxClusterSmem,
-        cudaDevAttrMaxSharedMemoryPerClusterOptin, dev);
-
-    std::cout << "Max shared memory per cluster: "
-              << maxClusterSmem / 1024 << " KB\n";
-
-    // On demande le max disponible
-    cudaFuncSetAttribute(clusterSharedDemo,
-        cudaFuncAttributeMaxDynamicSharedMemorySize,
-        maxClusterSmem);
-
-    int threads = 256;
-    int blocks = 2; // 2 blocs par cluster (défini par __cluster_dims__)
-
-    void *args[] = {};
-    cudaLaunchKernel((void*)clusterSharedDemo,
-                     dim3(blocks), dim3(threads),
-                     args, maxClusterSmem, 0);
-
-    cudaDeviceSynchronize();
+  test<double>();
+  return 0;
 }
 
+// __global__ __cluster_dims__(2, 1, 1)
+// void clusterSharedDemo() {
+//     extern __shared__ float cluster_smem[];
+//     cluster_group cluster = this_cluster();
+//     int total = cluster.dim_blocks().x * blockDim.x;
+//     int global_idx = cluster.block_rank() * blockDim.x + threadIdx.x;
 
+//     cluster_smem[global_idx] = (float)global_idx;
+//     cluster.sync();
 
+//     if (cluster.block_rank() == 0 && threadIdx.x == 0) {
+//         printf("Cluster shared memory active, total threads: %d\n", total);
+//     }
+// }
 
+// int main() {
+//     int dev = 0;
+//     cudaSetDevice(dev);
 
+//     int maxClusterSmem = 0;
+//     cudaDeviceGetAttribute(&maxClusterSmem,
+//         cudaDevAttrMaxSharedMemoryPerClusterOptin, dev);
 
+//     std::cout << "Max shared memory per cluster: "
+//               << maxClusterSmem / 1024 << " KB\n";
 
+//     // On demande le max disponible
+//     cudaFuncSetAttribute(clusterSharedDemo,
+//         cudaFuncAttributeMaxDynamicSharedMemorySize,
+//         maxClusterSmem);
 
+//     int threads = 256;
+//     int blocks = 2; // 2 blocs par cluster (défini par __cluster_dims__)
 
+//     void *args[] = {};
+//     cudaLaunchKernel((void*)clusterSharedDemo,
+//                      dim3(blocks), dim3(threads),
+//                      args, maxClusterSmem, 0);
 
-
-
-
-
-
-
-
-
-
+//     cudaDeviceSynchronize();
+// }
 
 
 

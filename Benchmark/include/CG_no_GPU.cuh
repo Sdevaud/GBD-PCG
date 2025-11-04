@@ -1,7 +1,8 @@
 #include <iostream>
 #include <cmath>
 
-void initilisation(const double* A, const double* b, double* r, double* P, const double* x0, int size) {
+template<typename T>
+void initilisation(const T* A, const T* b, T* r, T* P, const T* x0, int size) {
   for(int i = 0; i < size; ++i) {
     r[i] = 0.0;
     for(int j = 0; j < size; ++j) {
@@ -12,10 +13,11 @@ void initilisation(const double* A, const double* b, double* r, double* P, const
   }
 }
 
-double compute_alpha(const double* A, const double* P, double* AP, 
-  const double* r, int size, int k, double& alpha_num) {
+template<typename T>
+T compute_alpha(const T* A, const T* P, T* AP, 
+  const T* r, int size, int k, T& alpha_num) {
 
-  double  alpha_denom = 0.0f;
+  T  alpha_denom = 0.0f;
 
   for (int i = 0; i < size; ++i) {
     AP[i] = 0.0f;
@@ -31,10 +33,11 @@ double compute_alpha(const double* A, const double* P, double* AP,
   return alpha_num / alpha_denom;
 }
 
-double compute_beta(const double* P, const double* AP, 
-  double* r, double* x, int size, double& alpha_num, double alpha) {
+template<typename T>
+T compute_beta(const T* P, const T* AP, 
+  T* r, T* x, int size, T& alpha_num, T alpha) {
 
-  double old_alpha_num = alpha_num;
+  T old_alpha_num = alpha_num;
   alpha_num = 0.0f;
 
   for (int i = 0; i < size; ++i) {
@@ -43,12 +46,11 @@ double compute_beta(const double* P, const double* AP,
     alpha_num += r[i] * r[i];
   }
 
-  
-
   return alpha_num / old_alpha_num;
 }
 
-bool compute_P(double* P, const double* r, double beta, int size, double tol, int k){
+template<typename T>
+bool compute_P(T* P, const T* r, T beta, int size, T tol, int k){
   bool stay_condition = false;
   for(int i = 0; i < size; ++i) {
     P[i] = -r[i] + beta * P[i];
@@ -59,22 +61,23 @@ bool compute_P(double* P, const double* r, double beta, int size, double tol, in
   return stay_condition;
 }
 
-
-void Conjugate_Gradien(const double* A, const double* b, double* x0, int state, int Knot_point, double tol = 1e-6) {
+template<typename T>
+void Conjugate_Gradien(const T* A, const T* b, T* x0, int state, int Knot_point, T tol = 1e-6) {
+  
   if (!A || !b || !x0) {
     std::cerr << "error: A, b or x0 is nullptr\n";
-    return ;
-}
+    return;
+  }
+
   int size = state * Knot_point;
-  double* r  = new double[size];
-  double* P  = new double[size];
-  double* AP = new double[size];
+  T* r  = new T[size];
+  T* P  = new T[size];
+  T* AP = new T[size];
   initilisation(A, b, r, P, x0, size);
   int k = 0;
-  double alpha_num = 0.0f, alpha = 0.0f, beta = 0.0f;
+  T alpha_num = 0.0f, alpha = 0.0f, beta = 0.0f;
   bool stay_condition = true;
   
-
   do {
     alpha = compute_alpha(A, P, AP, r, size, k, alpha_num);
     beta = compute_beta (P, AP, r, x0, size, alpha_num, alpha);

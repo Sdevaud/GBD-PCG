@@ -68,7 +68,8 @@ uint32_t solvePCGNew(
         T *h_lambda,
         unsigned stateSize,
         unsigned knotPoints,
-        struct pcg_config<T> *config) {
+        struct pcg_config<T> *config,
+        float* kernel_time_ms) {
 
     const uint32_t states_sq = stateSize * stateSize;
     const uint32_t Nnx_T = stateSize * knotPoints * sizeof(T);
@@ -127,7 +128,8 @@ uint32_t solvePCGNew(
                                                    d_p,
                                                    d_v_temp,
                                                    d_eta_new_temp,
-                                                   config);
+                                                   config,
+                                                   kernel_time_ms);
 
     if (config->pcg_org_trans) {
         // TRANS
@@ -326,7 +328,8 @@ uint32_t solvePCGCooperativeKernel(const uint32_t state_size,
                                    T *d_p,
                                    T *d_v_temp,
                                    T *d_eta_new_temp,
-                                   struct pcg_config<T> *config) {
+                                   struct pcg_config<T> *config,
+                                   float* kernel_time_ms) {
     uint32_t *d_pcg_iters;
     gpuErrchk(cudaMalloc(&d_pcg_iters, sizeof(uint32_t)));
     bool *d_pcg_exit;
@@ -371,10 +374,20 @@ uint32_t solvePCGCooperativeKernel(const uint32_t state_size,
 
     size_t ppcg_kernel_smem_size = pcgSharedMemSize<T>(state_size, knot_points, config->pcg_org_trans, config->pcg_poly_order);
 
-    print_info_GPU(ppcg_kernel_smem_size, pcg_kernel, config);
+    #if DEBUG
+      print_info_GPU(ppcg_kernel_smem_size, pcg_kernel, config);
+    #endif
 
+    cudaEvent_t start, stop;
+    cudaEventCreate(&start);
+    cudaEventCreate(&stop);
+
+    cudaEventRecord(start);
     gpuErrchk(cudaLaunchCooperativeKernel(pcg_kernel, knot_points, pcg_constants::DEFAULT_BLOCK, kernelArgs,
                                           ppcg_kernel_smem_size));
+    cudaEventRecord(stop);
+    cudaEventSynchronize(stop);
+    cudaEventElapsedTime(kernel_time_ms, start, stop);
 
 
 //    gpuErrchk(cudaPeekAtLastError());

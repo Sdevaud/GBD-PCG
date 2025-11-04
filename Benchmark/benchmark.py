@@ -324,24 +324,23 @@ def save_data_plot(nbr_run, model_states_sizes, methods, method_paths, model_kno
    
 def benchmark():
 
-  #methods = ["gauss_jordan", "numpy", "gradient_no_gpu", "gpu_old", "gpu_new"]
   nbr_run = 50
-  methods = ["numpy", "gradient_no_gpu", "gauss_jordan"]
+  methods = ["numpy", "pcg_no_gpu", "pcg_no_precond"]
   method_paths = {
-    "numpy": "linlag.py",                          # script Python
-    "gradient_no_gpu": "./CG_no_GPU/benchmark_CG_no_GPU.exe", # exécutable CUDA
-    "gauss_jordan" : "./Gauss_Jordan/benchmark_gauss_jordan.exe"
+    "numpy": "linlag.py",
+    "pcg_no_gpu": "./CG_no_GPU/benchmark_CG_no_GPU.exe",
+    "pcg_no_precond" : "./CG_no_precond/CG_no_precond.exe"
   }
 
   compile_all(method_paths)
 
   # first run states_sizes
   model_knot_point = [50]
-  model_states_sizes = [10*i+1 for i in range(0, 6)] # 1, 11, 21, 31, 41, 51
+  model_states_sizes = [7*i for i in range(1, 6)]
   save_data_plot(nbr_run, model_states_sizes, methods, method_paths, model_knot_point, "state")
 
   # second run knot_point
-  model_knot_point = [20*i+1 for i in range(0, 6)] # 1, 21, 41, 61, 81, 101
+  model_knot_point = [20*i for i in range(1, 8)]
   model_states_sizes = [30]
   save_data_plot(nbr_run, model_states_sizes, methods, method_paths, model_knot_point, "horizon")
 
@@ -356,5 +355,5 @@ def benchmark_only_plot() :
 
 
 if __name__ == "__main__":
-  # benchmark()
-  benchmark_only_plot()
+  benchmark()
+  # benchmark_only_plot()

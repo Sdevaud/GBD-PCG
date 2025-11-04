@@ -37,13 +37,14 @@ void pcg_solve_example() {
         config.pcg_poly_coeff[0] = 1.0;
         printf("a1 = %f\n", config.pcg_poly_coeff[0]);
     }
-
+    float kernel_time_ms = 0;
     uint32_t res = solvePCGNew<T>(h_S,
                                   h_gamma,
                                   h_lambda,
                                   state_size,
                                   knot_points,
-                                  &config);
+                                  &config, 
+                                  &kernel_time_ms);
     T norm = 0;
     for (int i = 0; i < Nnx; i++) {
         norm += h_lambda[i] * h_lambda[i];

@@ -4,8 +4,8 @@
 
 using namespace std;
 
-
-void printVector(string vector_name, const float* arr, int size, int precision = 4) {
+template<typename T>
+void printVector(string vector_name, const T* arr, int size, int precision = 4) {
   cout << vector_name << " : ";  
   cout << "[";
     for (int i = 0; i < size; i++) {
@@ -15,7 +15,8 @@ void printVector(string vector_name, const float* arr, int size, int precision =
     cout << "]" << endl;
 }
 
-void printMatrix(string matrix_name, const float* mat, int size, int precision = 4) {
+template<typename T>
+void printMatrix(string matrix_name, const T* mat, int size, int precision = 4) {
   cout << matrix_name << " : \n";
   for (int i = 0; i < size; i++) {
       cout << "[";
@@ -27,7 +28,8 @@ void printMatrix(string matrix_name, const float* mat, int size, int precision =
   }
 }
 
-void mat_mul_vector(const float* matrix, const float* vector, float* result, int size) {
+template<typename T>
+void mat_mul_vector(const T* matrix, const T* vector, T* result, int size) {
   for (int i = 0; i < size; ++i) {
     for(int j = 0; j < size; ++j) {
       result[i] += matrix[i*size + j] * vector[j];

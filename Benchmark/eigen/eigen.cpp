@@ -2,8 +2,11 @@
 #include <stdlib.h>
 #include <cmath> 
 #include <chrono>
-#include "CG_no_GPU.cuh"
+#include <Eigen/Dense>
+#include <iostream>
+#include "Gauss_Jordan.cuh"
 #include "generate_A_SPD.cuh"
+
 
 template<typename T>
 void run_benchmark(const uint32_t state_size, const uint32_t knot_points) {
@@ -12,15 +15,12 @@ void run_benchmark(const uint32_t state_size, const uint32_t knot_points) {
   T* A = generate_spd_block_tridiagonal<T>(state_size, knot_points, 5);
   T* B = generate_random_vector<T>(Nnx, 5);
 
-  printMatrix("S", A, Nnx);
-
-  T* C = (double*)malloc(Nnx * sizeof(double));
-  for (int i = 0; i < Nnx; ++i) C[i] = 0.0;
-    
   // --- Start Chrono ---
   auto start = std::chrono::high_resolution_clock::now();
 
-  Conjugate_Gradien<T>(A, B, C, state_size, knot_points);
+  Eigen::Map<Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic>> M(A, Nnx, Nnx);
+  Eigen::Map<Eigen::VectorXd> p(B, Nnx);
+  Eigen::VectorXd x = M.colPivHouseholderQr().solve(p);
 
   auto end = std::chrono::high_resolution_clock::now();
   std::chrono::duration<T, std::milli> exec_time_ms = end - start;
@@ -30,11 +30,11 @@ void run_benchmark(const uint32_t state_size, const uint32_t knot_points) {
   // print only time execution for benchmar.py (in ms)
   std::cout << exec_time_ms.count() << std::endl;
 
-  printVector("C", C, state_size * knot_points);
+  std::cout << x << endl;
+  std::cout << std::endl << p << std::endl;
 
   free(A);
   free(B);
-  free(C);
 }
 
 int main(int argc, char* argv[]) {
