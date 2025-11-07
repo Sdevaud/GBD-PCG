@@ -137,6 +137,8 @@ void blk_tri_mv(T *s_dst,
     }
 }
 
+
+
 // for pcg_trans.cuh, if I_H is used, poly_order = 1, sparse block penta-diagonal matrix vector multiplication
 
 template<typename T>

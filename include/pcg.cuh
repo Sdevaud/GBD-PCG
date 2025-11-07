@@ -82,7 +82,7 @@ bool checkPcgOccupancy(void *kernel, dim3 block, uint32_t state_size, uint32_t k
         exit(5);
     }
 
-    int numProcs = deviceProp.multiProcessorCount;
+    // int numProcs = deviceProp.multiProcessorCount;
     int numBlocksPerSm;
     gpuErrchk(cudaOccupancyMaxActiveBlocksPerMultiprocessor(&numBlocksPerSm, kernel, block.x * block.y * block.z,
                                                             smem_size));

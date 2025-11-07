@@ -225,7 +225,8 @@ uint32_t solvePCG(
         T *h_lambda,
         unsigned stateSize,
         unsigned knotPoints,
-        struct pcg_config<T> *config) {
+        struct pcg_config<T> *config,
+        float* kernel_time_ms) {
 
     const uint32_t states_sq = stateSize * stateSize;
     const uint32_t Nnx_T = stateSize * knotPoints * sizeof(T);
@@ -284,7 +285,8 @@ uint32_t solvePCG(
                                                    d_p,
                                                    d_v_temp,
                                                    d_eta_new_temp,
-                                                   config);
+                                                   config,
+                                                   kernel_time_ms);
 
     /* Copy data back */
     gpuErrchk(cudaMemcpy(h_lambda, d_lambda, Nnx_T, cudaMemcpyDeviceToHost));

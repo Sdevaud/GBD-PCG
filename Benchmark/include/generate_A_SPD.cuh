@@ -3,6 +3,7 @@
 #include <random>
 #include <ctime>
 #include <iomanip>
+#include "CG_no_GPU.cuh"
 
 using namespace std;
 
@@ -55,8 +56,6 @@ T* transform_matrix(const T* Matrix, const int state_size, const int knot_points
 
     return h_S;
 }
-
-
 
 template<typename T>
 T norm_vecotr(const T* vector, const int size) {
@@ -181,146 +180,258 @@ T* generate_random_vector(int dim, unsigned int seed = 0) {
 }
 
 template<typename T>
-T* block_ptr(T* A, int i, int j, int N, int nx) {
-    return A + (i*N + j) * nx * nx;
+T* extract_block(const T* A, int i, int size_bloc, int size_A) {
+
+  T* block = new T[size_bloc * size_bloc];
+
+  int start_row = i / size_A;
+  int start_col = i % size_A;
+
+  for (int r = 0; r < size_bloc; ++r) {
+    for (int c = 0; c < size_bloc; ++c) {
+      int src_index = (start_row + r) * size_A + (start_col + c);
+      int dst_index = r * size_bloc + c;
+      block[dst_index] = A[src_index];
+    }
+  }
+
+  return block;
 }
 
 template<typename T>
-void mat_copy(T* dst, const T* src, int nx) {
-    memcpy(dst, src, nx*nx*sizeof(T));
+T* matmul(const T* A, const T* B, int size) {
+  T* C = new T[size * size];
+
+  for (int i = 0; i < size; ++i) {
+    for (int j = 0; j < size; ++j) {
+      T sum = 0;
+      for (int k = 0; k < size; ++k) {
+        sum += A[i * size + k] * B[k * size + j];
+      }
+      C[i * size + j] = sum;
+    }
+  }
+
+  return C;
 }
 
 template<typename T>
-void mat_zero(T* A, int nx) {
-    memset(A, 0, nx*nx*sizeof(T));
-}
+T* matinv(const T* A, int size) {
+    // Crée une copie locale de A car on va la modifier
+    T* M = new T[size * size];
+    for (int i = 0; i < size * size; ++i)
+        M[i] = A[i];
 
-template<typename T>
-void mat_transpose(T* AT, const T* A, int nx) {
-    for(int i=0;i<nx;i++)
-        for(int j=0;j<nx;j++)
-            AT[j*nx+i] = A[i*nx+j];
-}
+    // Crée la matrice identité (pour construire l’inverse)
+    T* I = new T[size * size];
+    for (int i = 0; i < size * size; ++i)
+        I[i] = (i / size == i % size) ? 1 : 0;
 
-template<typename T>
-void mat_mul(T* C, const T* A, const T* B, int nx) {
-    for(int i=0;i<nx;i++)
-        for(int j=0;j<nx;j++){
-            T s = 0;
-            for(int k=0;k<nx;k++) s += A[i*nx+k] * B[k*nx+j];
-            C[i*nx+j] = s;
+    // === Méthode de Gauss–Jordan ===
+    for (int k = 0; k < size; ++k) {
+        // Trouve le pivot
+        T pivot = M[k * size + k];
+        if (pivot == 0) {
+            std::cerr << "Erreur: pivot nul à l'étape " << k << std::endl;
+            delete[] M;
+            delete[] I;
+            return nullptr;
         }
+
+        // Normalise la ligne du pivot
+        for (int j = 0; j < size; ++j) {
+            M[k * size + j] /= pivot;
+            I[k * size + j] /= pivot;
+        }
+
+        // Élimine les autres lignes
+        for (int i = 0; i < size; ++i) {
+            if (i == k) continue;
+            T factor = M[i * size + k];
+            for (int j = 0; j < size; ++j) {
+                M[i * size + j] -= factor * M[k * size + j];
+                I[i * size + j] -= factor * I[k * size + j];
+            }
+        }
+    }
+
+    delete[] M;
+    return I;
 }
 
 template<typename T>
-void mat_inv(T* Ainv, const T* A, int nx) {
-    gauss_jordan(Ainv, A, nx); 
+T* mat_transpose(const T* A, int rows, int cols) {
+    T* AT = new T[rows * cols];
+
+    for (int i = 0; i < rows; ++i) {
+        for (int j = 0; j < cols; ++j) {
+            AT[j * rows + i] = A[i * cols + j];
+        }
+    }
+
+    return AT;
+}
+
+
+template<typename T>
+T* compute_D1inv_O1_D2inv(const T* D1, const T* D2, const T* O1, int nx) {
+  T* D1_inv = matinv<T>(D1, nx);
+  T* D2_inv = matinv<T>(D2, nx);
+  T* OD = matmul<T>(O1, D2_inv, nx);
+  T* DOD = matmul<T>(D1_inv, OD, nx);
+
+  for (int i = 0; i < nx*nx; ++i) DOD[i] *=  -1;
+
+  delete[] D1_inv;
+  delete[] D2_inv;
+  delete[] OD;
+
+  return DOD;
 }
 
 template<typename T>
-void mat_add(T* C, const T* A, const T* B, int nx) {
-    for(int i=0;i<nx*nx;i++) C[i] = A[i] + B[i];
-}
-
-template<typename T>
-void mat_sub(T* C, const T* A, const T* B, int nx) {
-    for(int i=0;i<nx*nx;i++) C[i] = A[i] - B[i];
-}
-
-template<typename T>
-void formPreconditioner_h_Pinv(T* S, T* P, int N, int nx) {
-  // P same layout N×N blocks, input S block-tridiag, output P block-tridiag
-  for(int i=0;i<N;i++)
-      for(int j=0;j<N;j++)
-          mat_zero(block_ptr(P,i,j,N,nx), nx);
-
-  for(int i=0;i<N;i++) {
-      T* Di  = block_ptr(S, i, i, N, nx);
-      T* Di_inv = (T*)malloc(nx*nx*sizeof(T));
-      mat_inv(Di_inv, Di, nx);
-
-      // place inv(Di) on diagonal block
-      mat_copy(block_ptr(P,i,i,N,nx), Di_inv, nx);
-
-      if(i < N-1) {
-          T* Oi = block_ptr(S, i, i+1, N, nx);
-          T *tmp = (T*)malloc(nx*nx*sizeof(T));
-          T *tmp2 = (T*)malloc(nx*nx*sizeof(T));
-          T* Dnext = block_ptr(S, i+1,i+1,N,nx);
-          T* Dnext_inv = (T*)malloc(nx*nx*sizeof(T));
-          mat_inv(Dnext_inv, Dnext, nx);
-
-          // O_P{i} = -inv(D{i})*O{i}*inv(D{i+1})
-          mat_mul(tmp, Di_inv, Oi, nx);
-          mat_mul(tmp2, tmp, Dnext_inv, nx);
-
-          T* OP = block_ptr(P, i, i+1, N, nx);
-          for(int k=0;k<nx*nx;k++) OP[k] = -tmp2[k];
-
-          free(tmp); free(tmp2); free(Dnext_inv);
-      }
-      free(Di_inv);
+void copy_block_in_matrix(T* Pinv, T* block, int size_bloc, int index) {
+for (int i = 0; i < size_bloc; ++i) {
+    Pinv[index + i] = block[i];
   }
 }
 
 template<typename T>
-void formPolyPreconditionerH(T* S, T* H, int N, int nx) {
-  // Step 1: build SS preconditioner P, but we only need O_add (off-diag)
-  T* P = (T*)calloc(N*N*nx*nx, sizeof(T));
-  formPreconditionerSS(S, P, N, nx);
+T* formPolyPreconditioner_Pinv(T* S, int N, int nx) {
 
-  // H initially zero full pentadiagonal
-  memset(H, 0, N*N*nx*nx*sizeof(T));
+  int size_P = 3 * nx * nx * N;
+  T* Pinv = (T*)calloc(size_P, sizeof(T));
 
-  T *tmp = (T*)malloc(nx*nx*sizeof(T));
-  T *tmp2 = (T*)malloc(nx*nx*sizeof(T));
-  T *OiT = (T*)malloc(nx*nx*sizeof(T));
-  T *OaddT = (T*)malloc(nx*nx*sizeof(T));
+  for (int i = 0; i < N-1; ++i) {
+    T* Di = extract_block<T>(S, i*nx*nx*N + i*nx, nx, N * nx);
+    T* Oi = extract_block<T>(S, i*nx*nx*N + i*nx + nx, nx, N * nx);
+    T* Di1 = extract_block<T>(S, (i+1)*nx*nx*N + (i+1)*nx, nx, N * nx);
+    T* Di_inv = matinv<T>(Di, nx);
+    T* DOD = compute_D1inv_O1_D2inv<T>(Di, Di1, Oi, nx);
+    T* DOD_T = mat_transpose<T>(DOD, nx, nx);
 
-  for(int i=0;i<N;i++) {
-      T* DHi = block_ptr(H, i, i, N, nx);
-      if(i == 0) {
-          T* Oadd = block_ptr(P,0,1,N,nx);
-          T* O = block_ptr(S,0,1,N,nx);
-          mat_transpose(OiT, O, nx);
-          mat_mul(tmp, Oadd, OiT, nx);
-          for(int k=0;k<nx*nx;k++) DHi[k] = -tmp[k];
-      }
-      else if(i == N-1) {
-          T* Oadd = block_ptr(P, N-2, N-1, N, nx);
-          T* O = block_ptr(S, N-2, N-1, N, nx);
-          mat_transpose(OaddT, Oadd, nx);
-          mat_mul(tmp, OaddT, O, nx);
-          for(int k=0;k<nx*nx;k++) DHi[k] = -tmp[k];
-      }
-      else {
-          // D_H{i}
-          T* Oadd_i = block_ptr(P,i,i+1,N,nx);
-          T* O_i    = block_ptr(S,i,i+1,N,nx);
-          T* Oadd_im1 = block_ptr(P,i-1,i,N,nx);
-          T* O_im1    = block_ptr(S,i-1,i,N,nx);
+    copy_block_in_matrix<T>(Pinv, Di_inv, nx*nx, 3*i*nx*nx + nx*nx);
+    copy_block_in_matrix<T>(Pinv, DOD_T, nx*nx, 3*i*nx*nx + 2*nx*nx);
+    copy_block_in_matrix<T>(Pinv, DOD, nx*nx, 3*i*nx*nx + 3*nx*nx);
 
-          mat_transpose(OiT, O_i, nx);
-          mat_mul(tmp, Oadd_i, OiT, nx);       // A
-          mat_transpose(OaddT, Oadd_im1, nx);
-          mat_mul(tmp2, OaddT, O_im1, nx);     // B
+    delete[] Di;
+    delete[] Oi;
+    delete[] Di1;
+    delete[] Di_inv;
+    delete[] DOD;
+    delete[] DOD_T;
+  }
+  T* DN = extract_block<T>(S, (N-1)*nx*nx*N + (N-1)*nx, nx, N * nx);
+  T* DN_inv = matinv<T>(DN, nx);
+  copy_block_in_matrix<T>(Pinv, DN_inv, nx*nx, 3*(N-1)*nx*nx + nx*nx);
 
-          T* DHi = block_ptr(H, i,i,N,nx);
-          for(int k=0;k<nx*nx;k++) 
-              DHi[k] = -(tmp[k] + tmp2[k]);
+  delete[] DN;
+  delete[] DN_inv;
 
-          // O_up2(i-1) = -O_add(i-1)*O(i)
-          T* Up2 = block_ptr(H, i-1, i+1, N, nx);
-          mat_mul(tmp, Oadd_im1, O_i, nx);
-          for(int k=0;k<nx*nx;k++) Up2[k] = -tmp[k];
+  return Pinv;
+}
 
-          // O_down2 = -O_add(i)'*O(i-1)'
-          T* Down2 = block_ptr(H, i+1, i-1, N, nx);
-          mat_transpose(OiT, O_i, nx);
-          mat_mul(tmp, OaddT, O_im1, nx);
-          for(int k=0;k<nx*nx;k++) Down2[k] = -tmp[k];
-      }
+template<typename T>
+T* formPolyPreconditioner_H(T* S, int N, int nx) {
+
+  // Chaque bloc fait nx*nx, chaque étage (bloc tri) fait 3*nx*nx,
+  // mais H est penta-diagonale, donc aussi 3*N blocs principaux (comme Pss)
+  int size_H = 3 * nx * nx * N;
+  T* H = (T*)calloc(size_H, sizeof(T));
+
+  // On aura besoin du "O_add" (équivalent du formPreconditionerSS)
+  // donc on commence par calculer O_add à partir de S
+  // (exactement comme dans ton formPolyPreconditioner_Pinv)
+  for (int i = 0; i < N - 1; ++i) {
+
+    // Extraction des blocs Di, Di+1 et Oi
+    T* Di = extract_block<T>(S, i * nx * nx * N + i * nx, nx, N * nx);
+    T* Oi = extract_block<T>(S, i * nx * nx * N + i * nx + nx, nx, N * nx);
+    T* Di1 = extract_block<T>(S, (i + 1) * nx * nx * N + (i + 1) * nx, nx, N * nx);
+
+    // Inversion des blocs diagonaux
+    T* Di_inv = matinv<T>(Di, nx);
+    T* Di1_inv = matinv<T>(Di1, nx);
+
+    // Calcul de O_add = -Di^{-1} * Oi * Di1^{-1}
+    T* tmp = matmul<T>(Di_inv, Oi, nx);
+    T* O_add = matmul<T>(tmp, Di1_inv, nx);
+    for (int k = 0; k < nx * nx; ++k) O_add[k] = -O_add[k];
+
+    delete[] tmp;
+    delete[] Di_inv;
+    delete[] Di1_inv;
+
+    // Maintenant on peut calculer les blocs de H selon le formalisme MATLAB
+    if (i == 0) {
+      // Premier bloc diagonal : D_H{1} = -O_add{1} * O{1}'
+      T* Oi_T = mat_transpose<T>(Oi, nx, nx);
+      T* DiagH = matmul<T>(O_add, Oi_T, nx);
+      for (int k = 0; k < nx * nx; ++k) DiagH[k] = -DiagH[k];
+      copy_block_in_matrix<T>(H, DiagH, nx * nx, 3 * i * nx * nx + nx * nx);
+      delete[] DiagH;
+      delete[] Oi_T;
+    }
+
+    if (i == N - 2) {
+      // Dernier bloc diagonal : D_H{N} = -O_add{N-1}' * O{N-1}
+      T* O_add_T = mat_transpose<T>(O_add, nx, nx);
+      T* DiagH = matmul<T>(O_add_T, Oi, nx);
+      for (int k = 0; k < nx * nx; ++k) DiagH[k] = -DiagH[k];
+      copy_block_in_matrix<T>(H, DiagH, nx * nx, 3 * (i + 1) * nx * nx + nx * nx);
+      delete[] O_add_T;
+      delete[] DiagH;
+    }
+
+    // Pour les blocs internes (2 ≤ i ≤ N−1)
+    if (i >= 1) {
+      // On a besoin de O_add(i-1) et O(i-1)
+      T* O_prev = extract_block<T>(S, (i - 1) * nx * nx * N + (i - 1) * nx + nx, nx, N * nx);
+      T* Di_prev = extract_block<T>(S, (i - 1) * nx * nx * N + (i - 1) * nx, nx, N * nx);
+      T* Di_prev_inv = matinv<T>(Di_prev, nx);
+      T* tmp_prev = matmul<T>(Di_prev_inv, O_prev, nx);
+      T* O_add_prev = matmul<T>(tmp_prev, Di_inv, nx);
+      for (int k = 0; k < nx * nx; ++k) O_add_prev[k] = -O_add_prev[k];
+
+      // D_H{i} = -O_add{i} * O{i}' - O_add{i-1}' * O{i-1}
+      T* Oi_T = mat_transpose<T>(Oi, nx, nx);
+      T* Oprev_T = mat_transpose<T>(O_prev, nx, nx);
+      T* term1 = matmul<T>(O_add, Oi_T, nx);
+      T* term2_tmp = mat_transpose<T>(O_add_prev, nx, nx);
+      T* term2 = matmul<T>(term2_tmp, Oprev_T, nx);
+      for (int k = 0; k < nx * nx; ++k) term1[k] = -(term1[k] + term2[k]);
+      copy_block_in_matrix<T>(H, term1, nx * nx, 3 * i * nx * nx + nx * nx);
+
+      // O_up2{i-1} = -O_add{i-1} * O{i}
+      T* O_up2 = matmul<T>(O_add_prev, Oi, nx);
+      for (int k = 0; k < nx * nx; ++k) O_up2[k] = -O_up2[k];
+      copy_block_in_matrix<T>(H, O_up2, nx * nx, 3 * (i - 1) * nx * nx + 3 * nx * nx);
+
+      // O_down2{i-1} = -O_add{i}' * O{i-1}'
+      T* O_down2_tmp = mat_transpose<T>(O_add, nx, nx);
+      T* O_down2 = matmul<T>(O_down2_tmp, Oprev_T, nx);
+      for (int k = 0; k < nx * nx; ++k) O_down2[k] = -O_down2[k];
+      copy_block_in_matrix<T>(H, O_down2, nx * nx, 3 * (i - 1) * nx * nx + nx * nx);
+
+      delete[] O_prev;
+      delete[] Di_prev;
+      delete[] Di_prev_inv;
+      delete[] tmp_prev;
+      delete[] O_add_prev;
+      delete[] Oi_T;
+      delete[] Oprev_T;
+      delete[] term1;
+      delete[] term2_tmp;
+      delete[] term2;
+      delete[] O_up2;
+      delete[] O_down2;
+    }
+
+    delete[] Di;
+    delete[] Oi;
+    delete[] Di1;
+    delete[] O_add;
   }
 
-  free(tmp); free(tmp2); free(OiT); free(OaddT);
+  return H;
 }

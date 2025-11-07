@@ -63,7 +63,12 @@
     "__nullptr": "cpp",
     "complex": "cpp",
     "map": "cpp",
-    "set": "cpp"
+    "set": "cpp",
+    "core": "cpp",
+    "__hash_table": "cpp",
+    "__split_buffer": "cpp",
+    "__tree": "cpp",
+    "queue": "cpp"
   },
   "C_Cpp.errorSquiggles": "disabled"
 }
