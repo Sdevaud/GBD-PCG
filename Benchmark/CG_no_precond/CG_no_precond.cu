@@ -7,7 +7,6 @@
 
 template<typename T>
 void run_benchmark(const uint32_t state_size, const uint32_t knot_points) {
-  const int Nnx2 = knot_points * state_size * state_size;
   const int Nnx = state_size * knot_points;
   struct pcg_config<T> config;
   config.pcg_org_trans = false;
@@ -31,6 +30,7 @@ void run_benchmark(const uint32_t state_size, const uint32_t knot_points) {
   #endif
 
   float kernel_time_ms = 0;
+  std::cout << state_size << std::endl;
 
   uint32_t res = solvePCGNew<T>(h_S,
                             h_gamma,
@@ -49,6 +49,10 @@ void run_benchmark(const uint32_t state_size, const uint32_t knot_points) {
       std::cout << kernel_time_ms << std::endl;
     #endif
   #endif
+
+  // std::cout << "Norm of solution vector: " << norm_vector<T>(h_lambda, Nnx) << std::endl;
+  // printVector<T>("h_S", h_S, 3*Nnx*state_size);
+  // printVector<T>("h_lambda", h_lambda, Nnx);
 
   free(h_S);
   free(h_gamma);

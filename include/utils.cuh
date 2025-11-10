@@ -137,6 +137,49 @@ void blk_tri_mv(T *s_dst,
     }
 }
 
+template<typename T>
+__device__
+void blk_tri_mv_optimized(T *s_dst,
+                  T *s_mat,
+                  T *s_vec,
+                  uint32_t b_dim,
+                  uint32_t max_block_id,
+                  uint32_t block_id) {
+  // s_vec contains the 3 vectors: b-1, b, b+1
+  // s_mat contains the 3 matrix blocks: left, middle, right
+  // s_dst = s_mat * {b-1, b, b+1}
+
+  const uint32_t FULL_MASK = 0xffffffff;
+  uint32_t tid  = threadIdx.x;
+  uint32_t warp_id = tid / warpSize;  // warp index within the block
+  uint32_t lane = tid % warpSize;     // thread index within the warp
+
+  // each warp compute one line
+  for (unsigned r = warp_id; r < b_dim; r += blockDim.x / warpSize) {
+
+    T val = static_cast<T>(0);
+    uint32_t numCols = (block_id == 0 || block_id == max_block_id) ? 2 * b_dim : 3 * b_dim;
+    uint32_t mat_offset = (block_id == 0) ? b_dim * b_dim : 0;
+    uint32_t vec_offset = (block_id == 0) ? b_dim : 0;
+
+    // each thread in the warp processes multiple columns spaced by warpSize
+    for (unsigned c = lane; c < numCols; c += warpSize) {
+      val += s_mat[mat_offset + b_dim * c + r] * s_vec[vec_offset + c];
+    }
+
+    // intra-warp reduction to sum partial products
+    for (int offset = warpSize / 2; offset > 0; offset /= 2) {
+      val += __shfl_down_sync(FULL_MASK, val, offset);
+    }
+
+    // Only thread lane 0 writes the final result
+    if (lane == 0) {
+      s_dst[r] = val;
+    }
+  }
+}
+
+
 
 
 // for pcg_trans.cuh, if I_H is used, poly_order = 1, sparse block penta-diagonal matrix vector multiplication

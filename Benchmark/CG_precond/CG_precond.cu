@@ -14,8 +14,8 @@ void run_benchmark(const uint32_t state_size, const uint32_t knot_points) {
   config.pcg_poly_order = 0;
 
   // data generetion
-  T* S = generate_spd_block_tridiagonal<T>(state_size, knot_points);
-  T* h_gamma = generate_random_vector<T>(Nnx);
+  T* S = generate_spd_block_tridiagonal<T>(state_size, knot_points, 5);
+  T* h_gamma = generate_random_vector<T>(Nnx, 5);
   T h_lambda[Nnx];
   for (int i = 0; i < Nnx; i++) {
       h_lambda[i] = 0.0;
@@ -76,6 +76,10 @@ void run_benchmark(const uint32_t state_size, const uint32_t knot_points) {
       std::cout << kernel_time_ms << std::endl;
     #endif
   #endif
+
+  // printVector<T>("h_lambda", h_lambda, Nnx);
+
+    std::cout << "Norm of solution vector: " << norm_vector<T>(h_lambda, Nnx) << std::endl;
 
   free(h_S);
   free(h_gamma);

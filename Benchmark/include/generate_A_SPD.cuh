@@ -1,11 +1,21 @@
+#pragma once
 #include <iostream>
 #include <cmath>
 #include <random>
 #include <ctime>
 #include <iomanip>
-#include "CG_no_GPU.cuh"
 
 using namespace std;
+
+template<typename T>
+T norm_vector(const T* vector, const int size) {
+  T norm = 0;
+  for(int i = 0; i < size; ++i) {
+    norm += vector[i] * vector[i];
+  }
+
+  return sqrt(norm);  
+}
 
 template<typename T>
 T* transform_matrix(const T* Matrix, const int state_size, const int knot_points)

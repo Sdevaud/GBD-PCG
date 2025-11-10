@@ -12,8 +12,6 @@ void run_benchmark(const uint32_t state_size, const uint32_t knot_points) {
   T* A = generate_spd_block_tridiagonal<T>(state_size, knot_points, 5);
   T* B = generate_random_vector<T>(Nnx, 5);
 
-  printMatrix("S", A, Nnx);
-
   T* C = (double*)malloc(Nnx * sizeof(double));
   for (int i = 0; i < Nnx; ++i) C[i] = 0.0;
     
@@ -29,8 +27,9 @@ void run_benchmark(const uint32_t state_size, const uint32_t knot_points) {
 
   // print only time execution for benchmar.py (in ms)
   std::cout << exec_time_ms.count() << std::endl;
+  std::cout << "Norm of solution vector: " << norm_vector<T>(C, Nnx) << std::endl;
 
-  printVector("C", C, state_size * knot_points);
+  printVector<T>("h_lambda", C, Nnx);
 
   free(A);
   free(B);

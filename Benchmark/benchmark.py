@@ -325,11 +325,13 @@ def save_data_plot(nbr_run, model_states_sizes, methods, method_paths, model_kno
 def benchmark():
 
   nbr_run = 50
-  methods = ["numpy", "pcg_no_gpu", "pcg_no_precond"]
+  methods = ["numpy", "eigen", "pcg_no_gpu", "pcg_no_precond", "pcg_precond"]
   method_paths = {
     "numpy": "linlag.py",
+    "eigen": "./Eigen/benchmark_Eigen.exe",
     "pcg_no_gpu": "./CG_no_GPU/benchmark_CG_no_GPU.exe",
-    "pcg_no_precond" : "./CG_no_precond/CG_no_precond.exe"
+    "pcg_no_precond" : "./CG_no_precond/CG_no_precond.exe",
+    "pcg_precond" : "./CG_precond/CG_precond.exe"
   }
 
   compile_all(method_paths)
