@@ -12,8 +12,8 @@ template<typename T>
 void run_benchmark(const uint32_t state_size, const uint32_t knot_points) {
 
   const int Nnx = state_size * knot_points;
-  T* A = generate_spd_block_tridiagonal<T>(state_size, knot_points);
-  T* B = generate_random_vector<T>(Nnx);
+  T* A = generate_spd_block_tridiagonal<T>(state_size, knot_points, 5);
+  T* B = generate_random_vector<T>(Nnx, 5);
 
   // --- Start Chrono ---
   auto start = std::chrono::high_resolution_clock::now();
@@ -29,6 +29,7 @@ void run_benchmark(const uint32_t state_size, const uint32_t knot_points) {
 
   // print only time execution for benchmar.py (in ms)
   std::cout << exec_time_ms.count() << std::endl;
+    printVector<T>("h_lambda", x.data(), Nnx);
 
   free(A);
   free(B);

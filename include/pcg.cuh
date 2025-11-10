@@ -260,7 +260,7 @@ void pcg(
         blk_tri_mv_spa<T>(s_r_b, s_Sdb, s_Sob, s_lambda, state_size, knot_points - 1, block_id);
     } else {
         // ORG
-        blk_tri_mv<T>(s_r_b, s_S, s_lambda, state_size, knot_points - 1, block_id);
+        blk_tri_mv_optimized<T>(s_r_b, s_S, s_lambda, state_size, knot_points - 1, block_id);
     }
     __syncthreads();
     for (unsigned ind = thread_id; ind < state_size; ind += block_dim) {

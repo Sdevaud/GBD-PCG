@@ -77,7 +77,7 @@ void run_benchmark(const uint32_t state_size, const uint32_t knot_points) {
     #endif
   #endif
 
-  // printVector<T>("h_lambda", h_lambda, Nnx);
+  printVector<T>("h_lambda", h_lambda, Nnx);
 
     std::cout << "Norm of solution vector: " << norm_vector<T>(h_lambda, Nnx) << std::endl;
 

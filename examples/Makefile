@@ -1,6 +1,6 @@
 NVCC = nvcc
 # if need to debug with compute-sanitizer, use -G option
-CFLAGS = --compiler-options -Wall -O3 -I../include -I../GLASS
+CFLAGS = --compiler-options -Wall -O3 -I../include -I../GLASS -I../Benchmark/include
 
 all: precond no_precond
 precond: precond_m0 precond_m1 precond_T_m0 precond_T_m1
@@ -19,7 +19,7 @@ precond_T_m1:
 	$(NVCC) $(CFLAGS) -DKNOT_POINTS=11 -DSTATE_SIZE=29 -DPRECOND_POLY_ORDER=1 -DPCG_TYPE=true pcg_precond.cu -o precond_T_m1.exe
 
 no_precond_m0:
-	$(NVCC) $(CFLAGS) -DKNOT_POINTS=11 -DSTATE_SIZE=29 -DPRECOND_POLY_ORDER=0 -DPCG_TYPE=false pcg_no_precond.cu -o no_precond_m0.exe
+	$(NVCC) $(CFLAGS) -DKNOT_POINTS=15 -DSTATE_SIZE=35 -DPRECOND_POLY_ORDER=0 -DPCG_TYPE=false pcg_no_precond.cu -o no_precond_m0.exe
 
 no_precond_m1:
 	$(NVCC) $(CFLAGS) -DKNOT_POINTS=11 -DSTATE_SIZE=29 -DPRECOND_POLY_ORDER=1 -DPCG_TYPE=false pcg_no_precond.cu -o no_precond_m1.exe

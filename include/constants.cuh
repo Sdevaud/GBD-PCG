@@ -8,7 +8,7 @@
 #endif
 
 #ifndef KNOT_POINTS
-#define KNOT_POINTS 3
+#define KNOT_POINTS 4
 #endif
 
 #ifndef PCG_TYPE
@@ -41,8 +41,8 @@ namespace pcg_constants
   uint32_t DEFAULT_MAX_PCG_ITER = 10000;
   template <typename T>
   T DEFAULT_EPSILON = 1e-8;
-  dim3 DEFAULT_GRID(KNOT_POINTS); // one SMBlock per knot point
-  dim3 DEFAULT_BLOCK(STATE_SIZE); // one thread per state variable
+  dim3 DEFAULT_GRID(11); // one SMBlock per knot point
+  dim3 DEFAULT_BLOCK(1024); // one thread per state variable
   int sizeSM = 0;
   int sizeBlockShared = 0;
 }

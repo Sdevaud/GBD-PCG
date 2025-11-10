@@ -3,6 +3,7 @@
 #include "gpu_pcg.cuh"
 #include "gpuassert.cuh"
 #include "read_array.h"
+#include "generate_A_SPD.cuh"
 #include <ctime>
 
 #define tic      double tic_t = clock();
@@ -128,7 +129,7 @@ void pcg_solve_example() {
 
         printf("result: lambda norm = %f, pcg iter = %d\n", sqrt(norm), res);
     }
-
+    printVector<T>("h_S", h_S, 3*Nnx*state_size);
     delete (h_S);
     delete (h_Pinv);
 
