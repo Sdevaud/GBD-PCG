@@ -32,13 +32,13 @@ void run_benchmark(const uint32_t state_size, const uint32_t knot_points) {
   float kernel_time_ms = 0;
   std::cout << state_size << std::endl;
 
-  uint32_t res = solvePCGNew<T>(h_S,
-                            h_gamma,
-                            h_lambda,
-                            state_size,
-                            knot_points,
-                            &config,
-                            &kernel_time_ms);
+  // uint32_t res = solvePCGNew<T>(h_S,
+  //                           h_gamma,
+  //                           h_lambda,
+  //                           state_size,
+  //                           knot_points,
+  //                           &config,
+  //                           &kernel_time_ms);
 
   #if BENCHMARK
     #if MEMPCY
@@ -51,7 +51,8 @@ void run_benchmark(const uint32_t state_size, const uint32_t knot_points) {
   #endif
 
   // std::cout << "Norm of solution vector: " << norm_vector<T>(h_lambda, Nnx) << std::endl;
-  // printVector<T>("h_S", h_S, 3*Nnx*state_size);
+  printMatrix<T>("S", S, Nnx);
+  printVector<T>("h_S", h_S, 3*Nnx*state_size);
   // printVector<T>("h_lambda", h_lambda, Nnx);
 
   free(h_S);

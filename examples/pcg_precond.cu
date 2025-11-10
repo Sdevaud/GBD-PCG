@@ -15,6 +15,7 @@ void pcg_solve_example() {
     const uint32_t knot_points = KNOT_POINTS;
     const int Nnx2 = knot_points * state_size * state_size;
     const int Nnx = state_size * knot_points;
+    float time = 0.0;
 
     T h_lambda[Nnx];
     for (int i = 0; i < Nnx; i++) {
@@ -70,7 +71,8 @@ void pcg_solve_example() {
                                            h_lambda,
                                            state_size,
                                            knot_points,
-                                           &config);
+                                           &config, 
+                                           &time);
                 T norm = 0;
                 for (int i = 0; i < Nnx; i++) {
                     norm += h_lambda[i] * h_lambda[i];
@@ -96,7 +98,8 @@ void pcg_solve_example() {
                                                h_lambda,
                                                state_size,
                                                knot_points,
-                                               &config);
+                                               &config,
+                                               &time);
                     T norm = 0;
                     for (int i = 0; i < Nnx; i++) {
                         norm += h_lambda[i] * h_lambda[i];
@@ -116,7 +119,8 @@ void pcg_solve_example() {
                                    h_lambda,
                                    state_size,
                                    knot_points,
-                                   &config);
+                                   &config, 
+                                   &time);
         T norm = 0;
         for (int i = 0; i < Nnx; i++) {
             norm += h_lambda[i] * h_lambda[i];
