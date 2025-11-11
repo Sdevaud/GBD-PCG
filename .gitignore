@@ -1,5 +1,6 @@
 *.exe
 *.out
+*.json
 # *.o
 examples/data/
 # Benchmark/plots
