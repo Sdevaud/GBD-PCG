@@ -13,6 +13,22 @@
 #define KNOT_POINTS 100
 #endif
 
+#ifndef BENCHMARK
+#define BENCHMARK 0
+#endif
+
+#ifndef MEMPCY
+#define MEMPCY 0
+#endif
+
+#ifndef DEBUG
+#define DEBUG 0
+#endif
+
+#ifndef OPTIMISED
+#define OPTIMISED 0
+#endif
+
 template<typename T>
 void run_benchmark(const uint32_t state_size, const uint32_t knot_points) {
 

@@ -4,11 +4,11 @@
 #include <cuda_runtime.h>
 
 #ifndef STATE_SIZE
-#define STATE_SIZE 40
+#define STATE_SIZE 5
 #endif
 
 #ifndef KNOT_POINTS
-#define KNOT_POINTS 100
+#define KNOT_POINTS 1000
 #endif
 
 #ifndef PCG_TYPE

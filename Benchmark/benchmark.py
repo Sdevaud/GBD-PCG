@@ -84,7 +84,8 @@ def eliminate_outliers(results):
 def plot_filtered_results(filtered_results, avg, model_sizes, method_names,
                           file_name,
                           save_path=None,
-                          metric_name="Execution time [ms]",
+                          x_label="Model size (states)",
+                          y_label="Execution time [ms]",
                           title="Benchmark Results",
                           ):
     """
@@ -115,8 +116,8 @@ def plot_filtered_results(filtered_results, avg, model_sizes, method_names,
     # plt.xscale('log')
     # plt.yscale('log')
     plt.xticks(model_sizes, model_sizes)
-    plt.xlabel('Model size (log scale)')
-    plt.ylabel(metric_name + ' (log scale)')
+    plt.xlabel(x_label)
+    plt.ylabel(y_label)
     plt.title(title)
     plt.legend(title='Method')
     plt.grid(True, which="both", ls="--", alpha=0.5)
@@ -242,34 +243,12 @@ def read_data(benchmark_name, base_dir="data"):
 
 def compute_run(nbr_run, model_states_sizes, methods, method_paths, model_knot_points):
     """
-    Run benchmarks over multiple state sizes and/or knot points.
-
-    Parameters
-    ----------
-    nbr_run : int
-        Number of repetitions for averaging.
-    model_states_sizes : list[int]
-        List of model state sizes (can be length 1).
-    methods : list[str]
-        Solver methods to benchmark.
-    method_paths : dict[str, str]
-        Mapping of method names to their executable/script paths.
-    model_knot_points : list[int]
-        List of knot points (can be length 1).
-
-    Returns
-    -------
-    results : list[list[list[float]]]
-        results[run][i][j] = execution time for run, (state_size, knot_point) index i, and method j.
+    Compile et exécute chaque méthode pour différentes tailles d'état et horizons.
     """
-    # Vérification de compatibilité des tailles
-    if len(model_states_sizes) > 1 and len(model_knot_points) > 1 and len(model_states_sizes) != len(model_knot_points):
-        raise ValueError(
-            "❌ model_states_sizes and model_knot_points must have the same length, "
-            "or one of them must be of length 1."
-        )
 
-    # Étendre les listes pour avoir la même taille
+    if len(model_states_sizes) > 1 and len(model_knot_points) > 1 and len(model_states_sizes) != len(model_knot_points):
+        raise ValueError("❌ model_states_sizes and model_knot_points must have the same length, or one of them must be of length 1.")
+
     n_points = max(len(model_states_sizes), len(model_knot_points))
     if len(model_states_sizes) == 1:
         model_states_sizes *= n_points
@@ -286,26 +265,30 @@ def compute_run(nbr_run, model_states_sizes, methods, method_paths, model_knot_p
 
             for j, method in enumerate(methods):
                 exe_path = method_paths[method]
+                base_dir = os.path.dirname(exe_path)
+                base_name = os.path.splitext(os.path.basename(exe_path))[0]
 
                 # Si c’est un script Python
                 if exe_path.endswith(".py"):
                     cmd = f"python3 {exe_path} {size} {knot_point}"
 
-                # Si c’est un exécutable déjà prêt
-                elif exe_path.endswith(".exe"):
-                    base_name, _ = os.path.splitext(exe_path)
-                    src_cu = base_name + ".cu"
-                    src_cpp = base_name + ".cpp"
-                    exe_name = f"{base_name}_{size}_{knot_point}.exe"
+                # Sinon c’est un exécutable à recompiler
+                else:
+                    src_cu = os.path.join(base_dir, f"{base_name}.cu")
+                    src_cpp = os.path.join(base_dir, f"{base_name}.cpp")
+                    exe_name = os.path.join(base_dir, f"{base_name}_{size}_{knot_point}")
 
-                    # Détecter le type de source
+                    # Nettoyage avant recompilation
+                    subprocess.run(f"rm -f {exe_name}", shell=True)
+
+                    # Détection du type de source
                     if os.path.exists(src_cu):
                         compiler = "nvcc"
                         compile_cmd = (
                             f"{compiler} --compiler-options -Wall -O3 -std=c++17 "
                             f"-DBENCHMARK=1 -DDEBUG=0 -DMEMPCY=0 "
                             f"-DSTATE_SIZE={size} -DKNOT_POINTS={knot_point} "
-                            f"-I../../include -I../../GLASS -I../include "
+                            f"-I../include -I../GLASS -I./include "
                             f"{src_cu} -o {exe_name}"
                         )
                     elif os.path.exists(src_cpp):
@@ -313,78 +296,73 @@ def compute_run(nbr_run, model_states_sizes, methods, method_paths, model_knot_p
                         compile_cmd = (
                             f"{compiler} -Wall -O3 -std=c++17 "
                             f"-DSTATE_SIZE={size} -DKNOT_POINTS={knot_point} "
-                            f"-I../include -I.. -I/usr/include/eigen3 "
+                            f"-I./include -I. -I/usr/include/eigen3 "
                             f"{src_cpp} -o {exe_name}"
                         )
                     else:
-                        raise FileNotFoundError(
-                            f"❌ Aucun fichier source (.cu ou .cpp) trouvé pour {exe_path}"
-                        )
+                        raise FileNotFoundError(f"❌ Aucun fichier source (.cu ou .cpp) trouvé pour {exe_path}")
 
                     print(f"🔧 Compilation ({compiler}): {compile_cmd}")
                     subprocess.run(compile_cmd, shell=True, check=True)
-                    cmd = f"./{exe_name}"
-
-                else:
-                    raise ValueError(f"❌ Type de fichier non pris en charge : {exe_path}")
+                    cmd = f"{exe_name}"
 
                 print(f"▶️ Execution: {cmd}")
                 time_exec = run_cmd(cmd)
                 results[run][i][j] = time_exec
-                print(f"⏱️  Temps = {time_exec:.3f} s\n")
+                print(f"⏱️  Temps = {time_exec:.3f} ms\n")
 
     return results
 
 
-def save_data_plot(nbr_run, model_states_sizes, methods, method_paths, model_knot_point, file_name):
-  # results[run][model_size][method]
-  results = compute_run(nbr_run, model_states_sizes, methods, method_paths, model_knot_point)
-
-  # Filter and average
-  filtered_results, avg = eliminate_outliers(results)
-
+def save_data_plot(nbr_run, model_states_sizes, methods, method_paths, model_knot_point, file_name, title_plot, x_label="Model size (states)", y_label="Execution time [ms]"):
+  
   # write data and read data
   if len(model_states_sizes) == 1:
     sizes = model_knot_point
   if len(model_knot_point) == 1:
     sizes = model_states_sizes
 
+  # results[run][model_size][method]
+  results = compute_run(nbr_run, model_states_sizes, methods, method_paths, model_knot_point)
+
+  # Filter and average
+  filtered_results, avg = eliminate_outliers(results)
+
   write_data(filtered_results, avg, sizes, methods, file_name)
   data_filtred_result, data_avg, data_size, data_methods = read_data(file_name)
 
   # Plot results
-  plot_filtered_results(data_filtred_result, data_avg, data_size, data_methods, file_name + ".png")
+  plot_filtered_results(data_filtred_result, data_avg, data_size, data_methods, file_name + ".png", x_label=x_label, y_label=y_label, title=title_plot)
    
 def benchmark():
 
   nbr_run = 50
-  methods = ["numpy", "eigen", "pcg_no_gpu", "pcg_no_precond"]
+  methods = ["numpy", "eigen", "pcg_no_gpu", "pcg_no_precond", "pcg_precond"]
   method_paths = {
     "numpy": "linlag.py",
-    "eigen": "./Eigen/benchmark_Eigen.exe",
-    "pcg_no_gpu": "./CG_no_GPU/benchmark_CG_no_GPU.exe",
-    "pcg_no_precond" : "./CG_no_precond/CG_no_precond.exe"
+    "eigen": "./eigen/eigen.cpp",
+    "pcg_no_gpu": "./CG_no_GPU/benchmark_CG_no_GPU.cu",
+    "pcg_no_precond" : "./CG_no_precond/CG_no_precond.cu",
+    "pcg_precond" : "./CG_precond/CG_precond.cu"
   }
-
-  compile_all(method_paths)
 
   # first run states_sizes
   model_knot_point = [50]
-  model_states_sizes = [7*i for i in range(1, 6)]
-  save_data_plot(nbr_run, model_states_sizes, methods, method_paths, model_knot_point, "state")
+  model_states_sizes = [7*i for i in range(1, 7)]
+  save_data_plot(nbr_run, model_states_sizes, methods, method_paths, model_knot_point, "state", "Benchmark of the number of states with horizon = 50","increase the number of states")
 
   # second run knot_point
-  model_knot_point = [20*i for i in range(1, 8)]
+  model_knot_point = [15*i for i in range(1, 7)]
   model_states_sizes = [30]
-  save_data_plot(nbr_run, model_states_sizes, methods, method_paths, model_knot_point, "horizon")
+  save_data_plot(nbr_run, model_states_sizes, methods, method_paths, model_knot_point, "horizon", "Benchmark of the horizon with state size = 30", "increase the horizon")
 
 
 def benchmark_only_plot() :
   data_filtred_result, data_avg, data_size, data_methods = read_data("state")
-  plot_filtered_results(data_filtred_result, data_avg, data_size, data_methods, "state" + ".png")
+  plot_filtered_results(data_filtred_result, data_avg, data_size, data_methods, "state" + ".png", x_label="increase the number of states, horizon = 50", title="Benchmark of the number of states with horizon = 50")
 
-  data_filtred_result, data_avg, data_size, data_methods = read_data("state")
-  plot_filtered_results(data_filtred_result, data_avg, data_size, data_methods, "horizon" + ".png")
+  data_filtred_result, data_avg, data_size, data_methods = read_data("horizon")
+  plot_filtered_results(data_filtred_result, data_avg, data_size, data_methods, "horizon" + ".png", x_label="increase the horizon, state size = 30", title="Benchmark of the horizon with state size = 30")
 
 
 

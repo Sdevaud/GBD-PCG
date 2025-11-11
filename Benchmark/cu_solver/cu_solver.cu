@@ -16,8 +16,8 @@ void run_benchmark(const uint32_t state_size, const uint32_t knot_points) {
   const int Nnx = state_size * knot_points;
 
   // data generetion
-  T* h_S = generate_spd_block_tridiagonal(state_size, knot_points);
-  T* h_gamma = generate_random_vector(Nnx);
+  T* h_S = generate_spd_block_tridiagonal(state_size, knot_points, 5);
+  T* h_gamma = generate_random_vector(Nnx, 5);
 
   // time computation
   #if BENCHMARK

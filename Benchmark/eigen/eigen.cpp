@@ -4,7 +4,6 @@
 #include <chrono>
 #include <Eigen/Dense>
 #include <iostream>
-#include "Gauss_Jordan.cuh"
 #include "generate_A_SPD.cuh"
 
 #ifndef STATE_SIZE

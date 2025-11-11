@@ -56,8 +56,6 @@ void run_benchmark(const uint32_t state_size, const uint32_t knot_points) {
     #endif
   #endif
 
-  std::cout <<  norm_vector<T>(h_lambda, Nnx) << std::endl;
-
   free(h_S);
   free(h_gamma);
   free(h_Pinv);

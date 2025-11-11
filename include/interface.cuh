@@ -2,6 +2,8 @@
 
 #include <iostream>
 #include <stdint.h>
+#include <cuda.h>
+#include <cuda_runtime.h>
 #include "gpuassert.cuh"
 #include "types.cuh"
 #include "pcg.cuh"
@@ -288,6 +290,7 @@ uint32_t solvePCG(
                                                    config,
                                                    kernel_time_ms);
 
+
     /* Copy data back */
     gpuErrchk(cudaMemcpy(h_lambda, d_lambda, Nnx_T, cudaMemcpyDeviceToHost));
 
@@ -332,6 +335,11 @@ uint32_t solvePCGCooperativeKernel(const uint32_t state_size,
                                    T *d_eta_new_temp,
                                    struct pcg_config<T> *config,
                                    float* kernel_time_ms) {
+    cudaEvent_t start, stop;
+    cudaEventCreate(&start);
+    cudaEventCreate(&stop);
+    cudaEventRecord(start, 0);
+    
     uint32_t *d_pcg_iters;
     gpuErrchk(cudaMalloc(&d_pcg_iters, sizeof(uint32_t)));
     bool *d_pcg_exit;
@@ -343,6 +351,7 @@ uint32_t solvePCGCooperativeKernel(const uint32_t state_size,
                              cudaMemcpyHostToDevice));
     }
 
+    
 
     void *pcg_kernel = (void *) pcg<T, STATE_SIZE, KNOT_POINTS>;
 
@@ -380,16 +389,16 @@ uint32_t solvePCGCooperativeKernel(const uint32_t state_size,
       print_info_GPU(ppcg_kernel_smem_size, pcg_kernel, config);
     #endif
 
-    cudaEvent_t start, stop;
-    cudaEventCreate(&start);
-    cudaEventCreate(&stop);
-
-    cudaEventRecord(start);
     gpuErrchk(cudaLaunchCooperativeKernel(pcg_kernel, knot_points, pcg_constants::DEFAULT_BLOCK, kernelArgs,
                                           ppcg_kernel_smem_size));
-    cudaEventRecord(stop);
+    
+
+    gpuErrchk(cudaDeviceSynchronize());
+    cudaEventRecord(stop, 0);
     cudaEventSynchronize(stop);
     cudaEventElapsedTime(kernel_time_ms, start, stop);
+    cudaEventDestroy(start);
+    cudaEventDestroy(stop);
 
 
 //    gpuErrchk(cudaPeekAtLastError());
