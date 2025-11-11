@@ -153,7 +153,7 @@ void blk_tri_mv_optimized(T *s_dst,
   uint32_t tid  = threadIdx.x;
   uint32_t warp_id = tid / warpSize;  // warp index within the block
   uint32_t lane = tid % warpSize;     // thread index within the warp
-
+  
   // each warp compute one line
   for (unsigned r = warp_id; r < b_dim; r += blockDim.x / warpSize) {
 

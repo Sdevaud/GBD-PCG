@@ -4,19 +4,19 @@
 #include <cuda_runtime.h>
 
 #ifndef STATE_SIZE
-#define STATE_SIZE 3
+#define STATE_SIZE 40
 #endif
 
 #ifndef KNOT_POINTS
-#define KNOT_POINTS 4
+#define KNOT_POINTS 100
 #endif
 
 #ifndef PCG_TYPE
-#define PCG_TYPE true // false -> org, true -> trans
+#define PCG_TYPE false // false -> org, true -> trans
 #endif
 
 #ifndef PRECOND_POLY_ORDER
-#define PRECOND_POLY_ORDER 1 // now supports poly_order = 0, 1, 2, bigger number will not make a huge difference
+#define PRECOND_POLY_ORDER 0 // now supports poly_order = 0, 1, 2, bigger number will not make a huge difference
 #endif
 
 #ifndef CHOL_OR_LDL
@@ -33,6 +33,10 @@
 
 #ifndef DEBUG
 #define DEBUG 0
+#endif
+
+#ifndef OPTIMISED
+#define OPTIMISED 0
 #endif
 
 

@@ -5,20 +5,27 @@
 #include "CG_no_GPU.cuh"
 #include "generate_A_SPD.cuh"
 
+#ifndef STATE_SIZE
+#define STATE_SIZE 40
+#endif
+
+#ifndef KNOT_POINTS
+#define KNOT_POINTS 100
+#endif
+
 template<typename T>
 void run_benchmark(const uint32_t state_size, const uint32_t knot_points) {
 
   const int Nnx = state_size * knot_points;
-  T* A = generate_spd_block_tridiagonal<T>(state_size, knot_points, 5);
-  T* B = generate_random_vector<T>(Nnx, 5);
+  T* h_S = generate_spd_block_tridiagonal<T>(state_size, knot_points);
+  T* h_gamma = generate_random_vector<T>(Nnx);
 
-  T* C = (double*)malloc(Nnx * sizeof(double));
-  for (int i = 0; i < Nnx; ++i) C[i] = 0.0;
+  T* h_lambda = (T*) calloc(Nnx, sizeof(T));
     
   // --- Start Chrono ---
   auto start = std::chrono::high_resolution_clock::now();
 
-  Conjugate_Gradien<T>(A, B, C, state_size, knot_points);
+  Conjugate_Gradien<T>(h_S, h_gamma, h_lambda, state_size, knot_points);
 
   auto end = std::chrono::high_resolution_clock::now();
   std::chrono::duration<T, std::milli> exec_time_ms = end - start;
@@ -27,24 +34,16 @@ void run_benchmark(const uint32_t state_size, const uint32_t knot_points) {
 
   // print only time execution for benchmar.py (in ms)
   std::cout << exec_time_ms.count() << std::endl;
-  std::cout << "Norm of solution vector: " << norm_vector<T>(C, Nnx) << std::endl;
 
-  printVector<T>("h_lambda", C, Nnx);
-
-  free(A);
-  free(B);
-  free(C);
+  free(h_S);
+  free(h_gamma);
+  free(h_lambda);
 }
 
-int main(int argc, char* argv[]) {
+int main() {
 
-  if (argc < 3) {
-      std::cerr << "Usage: " << argv[0] << " <state> <horizon>" << std::endl;
-      return 1;
-  }
-
-  const uint32_t state_size   = std::atoi(argv[1]);
-  const uint32_t knot_points = std::atoi(argv[2]);
+  const uint32_t state_size   = STATE_SIZE;
+  const uint32_t knot_points = KNOT_POINTS;
 
   run_benchmark<double>(state_size, knot_points);
 

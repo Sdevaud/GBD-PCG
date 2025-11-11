@@ -5,6 +5,7 @@ CFLAGS = --compiler-options -Wall -O3 -std=c++17 \
 -DBENCHMARK=1 \
 -DDEBUG=0 \
 -DMEMPCY=0 \
+-DOPTIMISED=0 \
 -I../../include \
 -I../../GLASS \
 -I../include

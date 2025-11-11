@@ -269,20 +269,17 @@ def compute_run(nbr_run, model_states_sizes, methods, method_paths, model_knot_p
             "or one of them must be of length 1."
         )
 
-    # Déterminer la taille effective (celle qui varie)
-    n_points = max(len(model_states_sizes), len(model_knot_points))
-
     # Étendre les listes pour avoir la même taille
+    n_points = max(len(model_states_sizes), len(model_knot_points))
     if len(model_states_sizes) == 1:
-        model_states_sizes = model_states_sizes * n_points
+        model_states_sizes *= n_points
     if len(model_knot_points) == 1:
-        model_knot_points = model_knot_points * n_points
+        model_knot_points *= n_points
 
-    # Crée la structure des résultats
     results = [[[0.0 for _ in methods] for _ in range(n_points)] for _ in range(nbr_run)]
 
     for run in range(nbr_run):
-        print(f"🧪 Run {run+1}/{nbr_run}")
+        print(f"🧪 Run {run + 1}/{nbr_run}")
         for i in range(n_points):
             size = model_states_sizes[i]
             knot_point = model_knot_points[i]
@@ -290,15 +287,51 @@ def compute_run(nbr_run, model_states_sizes, methods, method_paths, model_knot_p
             for j, method in enumerate(methods):
                 exe_path = method_paths[method]
 
-                # Commande selon le type (Python script ou binaire)
+                # Si c’est un script Python
                 if exe_path.endswith(".py"):
                     cmd = f"python3 {exe_path} {size} {knot_point}"
-                else:
-                    cmd = f"{exe_path} {size} {knot_point}"
 
-                print(f"→ {cmd}")
+                # Si c’est un exécutable déjà prêt
+                elif exe_path.endswith(".exe"):
+                    base_name, _ = os.path.splitext(exe_path)
+                    src_cu = base_name + ".cu"
+                    src_cpp = base_name + ".cpp"
+                    exe_name = f"{base_name}_{size}_{knot_point}.exe"
+
+                    # Détecter le type de source
+                    if os.path.exists(src_cu):
+                        compiler = "nvcc"
+                        compile_cmd = (
+                            f"{compiler} --compiler-options -Wall -O3 -std=c++17 "
+                            f"-DBENCHMARK=1 -DDEBUG=0 -DMEMPCY=0 "
+                            f"-DSTATE_SIZE={size} -DKNOT_POINTS={knot_point} "
+                            f"-I../../include -I../../GLASS -I../include "
+                            f"{src_cu} -o {exe_name}"
+                        )
+                    elif os.path.exists(src_cpp):
+                        compiler = "g++"
+                        compile_cmd = (
+                            f"{compiler} -Wall -O3 -std=c++17 "
+                            f"-DSTATE_SIZE={size} -DKNOT_POINTS={knot_point} "
+                            f"-I../include -I.. -I/usr/include/eigen3 "
+                            f"{src_cpp} -o {exe_name}"
+                        )
+                    else:
+                        raise FileNotFoundError(
+                            f"❌ Aucun fichier source (.cu ou .cpp) trouvé pour {exe_path}"
+                        )
+
+                    print(f"🔧 Compilation ({compiler}): {compile_cmd}")
+                    subprocess.run(compile_cmd, shell=True, check=True)
+                    cmd = f"./{exe_name}"
+
+                else:
+                    raise ValueError(f"❌ Type de fichier non pris en charge : {exe_path}")
+
+                print(f"▶️ Execution: {cmd}")
                 time_exec = run_cmd(cmd)
                 results[run][i][j] = time_exec
+                print(f"⏱️  Temps = {time_exec:.3f} s\n")
 
     return results
 
@@ -325,13 +358,12 @@ def save_data_plot(nbr_run, model_states_sizes, methods, method_paths, model_kno
 def benchmark():
 
   nbr_run = 50
-  methods = ["numpy", "eigen", "pcg_no_gpu", "pcg_no_precond", "pcg_precond"]
+  methods = ["numpy", "eigen", "pcg_no_gpu", "pcg_no_precond"]
   method_paths = {
     "numpy": "linlag.py",
     "eigen": "./Eigen/benchmark_Eigen.exe",
     "pcg_no_gpu": "./CG_no_GPU/benchmark_CG_no_GPU.exe",
-    "pcg_no_precond" : "./CG_no_precond/CG_no_precond.exe",
-    "pcg_precond" : "./CG_precond/CG_precond.exe"
+    "pcg_no_precond" : "./CG_no_precond/CG_no_precond.exe"
   }
 
   compile_all(method_paths)

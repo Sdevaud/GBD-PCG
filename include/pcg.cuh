@@ -260,7 +260,11 @@ void pcg(
         blk_tri_mv_spa<T>(s_r_b, s_Sdb, s_Sob, s_lambda, state_size, knot_points - 1, block_id);
     } else {
         // ORG
-        blk_tri_mv_optimized<T>(s_r_b, s_S, s_lambda, state_size, knot_points - 1, block_id);
+        #if OPTIMISED
+          blk_tri_mv_optimized<T>(s_r_b, s_S, s_lambda, state_size, knot_points - 1, block_id);
+        #else
+          blk_tri_mv<T>(s_r_b, s_S, s_lambda, state_size, knot_points - 1, block_id);
+        #endif
     }
     __syncthreads();
     for (unsigned ind = thread_id; ind < state_size; ind += block_dim) {
@@ -278,7 +282,11 @@ void pcg(
         blk_tri_mv_spa<T>(s_r_tilde, s_Pinvdb, s_Pinvob, s_r, state_size, knot_points - 1, block_id);
     } else {
         // ORG
-        blk_tri_mv<T>(s_r_tilde, s_Pinv, s_r, state_size, knot_points - 1, block_id);
+        #if OPTIMISED
+          blk_tri_mv_optimized<T>(s_r_tilde, s_Pinv, s_r, state_size, knot_points - 1, block_id);
+        #else
+          blk_tri_mv<T>(s_r_tilde, s_Pinv, s_r, state_size, knot_points - 1, block_id);
+        #endif
     }
     __syncthreads();
 
@@ -314,7 +322,11 @@ void pcg(
             blk_tri_mv_spa<T>(s_upsilon, s_Sdb, s_Sob, s_p, state_size, knot_points - 1, block_id);
         } else {
             // ORG
-            blk_tri_mv<T>(s_upsilon, s_S, s_p, state_size, knot_points - 1, block_id);
+            #if OPTIMISED
+              blk_tri_mv_optimized<T>(s_upsilon, s_S, s_p, state_size, knot_points - 1, block_id);
+            #else 
+              blk_tri_mv<T>(s_upsilon, s_S, s_p, state_size, knot_points - 1, block_id);
+            #endif
         }
         __syncthreads();
 
@@ -345,7 +357,11 @@ void pcg(
             blk_tri_mv_spa<T>(s_r_tilde, s_Pinvdb, s_Pinvob, s_r, state_size, knot_points - 1, block_id);
         } else {
             // ORG
-            blk_tri_mv<T>(s_r_tilde, s_Pinv, s_r, state_size, knot_points - 1, block_id);
+            #if OPTIMISED
+              blk_tri_mv_optimized<T>(s_r_tilde, s_Pinv, s_r, state_size, knot_points - 1, block_id);
+            #else
+              blk_tri_mv<T>(s_r_tilde, s_Pinv, s_r, state_size, knot_points - 1, block_id);
+            #endif
         }
         __syncthreads();
 
