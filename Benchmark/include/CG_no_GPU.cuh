@@ -51,40 +51,32 @@ T compute_beta(const T* P, const T* AP,
 }
 
 template<typename T>
-bool compute_P(T* P, const T* r, T beta, int size, T tol, int k){
-  bool stay_condition = false;
+void compute_P(T* P, const T* r, T beta, int size, T tol){
   for(int i = 0; i < size; ++i) {
     P[i] = -r[i] + beta * P[i];
-    if (std::fabs(r[i]) > tol) stay_condition = true;
   }
-
-  // if (size < k) stay_condition = false;
-  return stay_condition;
 }
 
 template<typename T>
-void Conjugate_Gradien(const T* A, const T* b, T* x0, int state, int Knot_point, T tol = 1e-6) {
+void Conjugate_Gradien(const T* A, const T* b, T* x0, int state, int knot_point, uint32_t nbr_iteration, T tol = 1e-8) {
   
   if (!A || !b || !x0) {
     std::cerr << "error: A, b or x0 is nullptr\n";
     return;
   }
 
-  int size = state * Knot_point;
+  int size = state * knot_point;
   T* r  = new T[size];
   T* P  = new T[size];
   T* AP = new T[size];
   initilisation(A, b, r, P, x0, size);
-  int k = 0;
-  T alpha_num = 0.0f, alpha = 0.0f, beta = 0.0f;
-  bool stay_condition = true;
+  T alpha_num = 0.0, alpha = 0.0, beta = 0.0;
   
-  do {
-    alpha = compute_alpha(A, P, AP, r, size, k, alpha_num);
+  for (uint32_t i = 0; i < nbr_iteration; ++i) {
+    alpha = compute_alpha(A, P, AP, r, size, i, alpha_num);
     beta = compute_beta (P, AP, r, x0, size, alpha_num, alpha);
-    stay_condition = compute_P(P, r, beta, size, tol, k);
-    ++k;
-  } while(stay_condition);
+    compute_P(P, r, beta, size, tol);
+  }
 
   delete[] r;
   delete[] P;

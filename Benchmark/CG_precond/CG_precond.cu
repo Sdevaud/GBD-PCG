@@ -20,6 +20,7 @@ void run_benchmark(const uint32_t state_size, const uint32_t knot_points) {
   for (int i = 0; i < Nnx; i++) {
       h_lambda[i] = 0.0;
   }
+  T *h_H = NULL;
 
 
   T* h_S = transform_matrix<T>(S, state_size, knot_points);
@@ -27,15 +28,14 @@ void run_benchmark(const uint32_t state_size, const uint32_t knot_points) {
   
   // time computation
 
+  float kernel_time_ms = 0;
+
   #if BENCHMARK
     #if MEMPCY
       auto start = std::chrono::high_resolution_clock::now();
     #endif
   #endif
 
-  float kernel_time_ms = 0;
-
-  T *h_H = NULL;
   uint32_t res = solvePCG<T>(h_S,
                               h_Pinv,
                               h_H,

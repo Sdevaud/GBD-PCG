@@ -335,10 +335,6 @@ uint32_t solvePCGCooperativeKernel(const uint32_t state_size,
                                    T *d_eta_new_temp,
                                    struct pcg_config<T> *config,
                                    float* kernel_time_ms) {
-    cudaEvent_t start, stop;
-    cudaEventCreate(&start);
-    cudaEventCreate(&stop);
-    cudaEventRecord(start, 0);
     
     uint32_t *d_pcg_iters;
     gpuErrchk(cudaMalloc(&d_pcg_iters, sizeof(uint32_t)));
@@ -351,7 +347,10 @@ uint32_t solvePCGCooperativeKernel(const uint32_t state_size,
                              cudaMemcpyHostToDevice));
     }
 
-    
+    cudaEvent_t start, stop;
+    cudaEventCreate(&start);
+    cudaEventCreate(&stop);
+    cudaEventRecord(start);
 
     void *pcg_kernel = (void *) pcg<T, STATE_SIZE, KNOT_POINTS>;
 
@@ -394,7 +393,7 @@ uint32_t solvePCGCooperativeKernel(const uint32_t state_size,
     
 
     gpuErrchk(cudaDeviceSynchronize());
-    cudaEventRecord(stop, 0);
+    cudaEventRecord(stop);
     cudaEventSynchronize(stop);
     cudaEventElapsedTime(kernel_time_ms, start, stop);
     cudaEventDestroy(start);

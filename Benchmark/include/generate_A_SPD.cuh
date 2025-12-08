@@ -4,8 +4,128 @@
 #include <random>
 #include <ctime>
 #include <iomanip>
-
+#include <limits>
 using namespace std;
+
+#include <cmath>
+#include <iostream>
+
+template<typename T>
+bool is_spd(const T* A, int N) {
+    // On fait une copie car le Cholesky modifie la matrice.
+    T* L = new T[N * N];
+    for (int i = 0; i < N * N; ++i)
+        L[i] = A[i];
+
+    // -------- Test 1 : Symétrie --------
+    for (int i = 0; i < N; ++i) {
+        for (int j = i + 1; j < N; ++j) {
+            if (std::abs(L[i*N + j] - L[j*N + i]) > 1e-6) {
+                delete[] L;
+                return false;
+            }
+        }
+    }
+
+    // -------- Test 2 : Décomposition de Cholesky --------
+    for (int i = 0; i < N; ++i) {
+        for (int j = 0; j <= i; ++j) {
+            T sum = L[i*N + j];
+
+            for (int k = 0; k < j; ++k)
+                sum -= L[i*N + k] * L[j*N + k];
+
+            if (i == j) {
+                if (sum <= (T)0) {
+                    delete[] L;
+                    return false;   // pivot négatif : pas SPD
+                }
+                L[i*N + j] = std::sqrt(sum);
+            } else {
+                L[i*N + j] = sum / L[j*N + j];
+            }
+        }
+    }
+
+    delete[] L;
+    return true;
+}
+
+
+template<typename T>
+void print_error(const T& error) {
+    std::cout << std::setprecision(std::numeric_limits<T>::max_digits10)
+              << error << std::endl;
+}
+
+template<typename T>
+T* value(const T* h_S, const int nx, const int N, int& size) {
+  int index = nx;
+  for (int i = 0; i < nx; ++i) index += i;
+  size = N*index + (N-1)*nx*nx;
+  T* value = new T[size];
+
+  for (int i = 1; i < N; ++i) {
+    for (int j = 0; j < nx; ++j) {
+      for (int k = 0; k < nx + j + 1; ++k) {
+        value[index] = h_S[i*nx*nx*N + j*nx*N + k +(i-1)*nx];
+        ++index;
+      }
+    }
+  }
+
+  index = 0;
+  for (int i = 0; i < nx; ++i) {
+    for (int j = 0; j < i + 1; ++j) {
+      value[index] = h_S[i*nx*N + j];
+      ++index;
+    }
+  }
+  return value;
+}
+
+int* generate_rowptr(const int nx, const int N, int& size)
+{
+  size = N * nx + 1;
+  int* rowptr = new int[size];
+  rowptr[0] = 0;
+
+  for(int i = 0; i < N; ++i) {
+    for(int j = 1; j < nx + 1; ++j) {
+      rowptr[i*nx + j] = rowptr[i*nx + j-1] + j + ((i == 0) ? 0 : nx);
+    }
+  }
+
+  return rowptr;
+}
+
+int* generate_colind(const int nx, const int N, int& size) {
+   
+  int index = nx;
+  for (int i = 0; i < nx; ++i) index += i;
+  size = (N-1) * (nx * nx + index) + index;
+  int* colind = new int[size];
+  cout << size << endl;
+
+  for (int i = 0; i < N-1; ++i) {
+    for (int j = 0; j < nx; ++j) {
+      for (int k = 0; k < nx + 1 + j; ++k) {
+        colind[index] = k + i * nx;
+        ++index;
+      }
+    }
+  }
+
+  index = 0;
+  for (int i = 0; i < nx; ++i) {
+    for (int j = 0; j < i + 1; ++j) {
+      colind[index] = j;
+      ++index;
+    } 
+  }
+
+  return colind;
+}
 
 template<typename T>
 T norm_vector(const T* vector, const int size) {
@@ -78,10 +198,10 @@ T norm_vecotr(const T* vector, const int size) {
 }
 
 template<typename T>
-void printVector(string vector_name, const T* arr, int size, int precision = 4) {
+void printVector(string vector_name, const T* arr, uint32_t size, int precision = 4) {
   std::cout << vector_name << " : ";  
   std::cout << "[";
-    for (int i = 0; i < size; i++) {
+    for (uint32_t i = 0; i < size; i++) {
         cout << fixed << setprecision(precision) << arr[i];
         if (i != size - 1) std::cout << ", ";
     }
@@ -89,11 +209,11 @@ void printVector(string vector_name, const T* arr, int size, int precision = 4) 
 }
 
 template<typename T>
-void printMatrix(string matrix_name, const T* mat, int size, int precision = 4) {
+void printMatrix(string matrix_name, const T* mat, uint32_t size, int precision = 4) {
   std::cout << matrix_name << " : \n";
-  for (int i = 0; i < size; i++) {
+  for (uint32_t i = 0; i < size; i++) {
       std::cout << "[";
-      for (int j = 0; j < size; j++) {
+      for (uint32_t j = 0; j < size; j++) {
           std::cout << fixed << setprecision(precision) << mat[i * size + j];
           if (j != size - 1) std::cout << ", ";
       }
@@ -102,88 +222,144 @@ void printMatrix(string matrix_name, const T* mat, int size, int precision = 4) 
 }
 
 template<typename T>
-void mat_mul_vector(const T* matrix, const T* vector, T* result, int size) {
-  for (int i = 0; i < size; ++i) {
-    for(int j = 0; j < size; ++j) {
+void mat_mul_vector(const T* matrix, const T* vector, T* result, uint32_t size) {
+  for (uint32_t i = 0; i < size; ++i) {
+    for(uint32_t j = 0; j < size; ++j) {
       result[i] += matrix[i*size + j] * vector[j];
     }
   }
+}
+
+template<typename T>
+void error_computation(const T* h_S, 
+                       const T* h_gamma, 
+                       const T* h_lambda, 
+                       const uint32_t Nnx, 
+                       T& error) 
+{
+  T* h_S_x_h_lambda = (T*)calloc(Nnx, sizeof(T));
+  mat_mul_vector(h_S, h_lambda, h_S_x_h_lambda, Nnx);
+  for (uint32_t i = 0; i < Nnx; ++i) {
+    error += fabs(h_S_x_h_lambda[i] - h_gamma[i]);
+  }
+  
+  free(h_S_x_h_lambda);
 }
 
 // Generates a block-tridiagonal SPD (T* A) matrix
 template<typename T>
 T* generate_spd_block_tridiagonal(int state_size, int knot_points, unsigned int seed = 0) {
 
+    // --- Handle random seed ---
     if (seed == 0)
-      seed = static_cast<unsigned int>(std::time(nullptr));
+        seed = static_cast<unsigned int>(std::time(nullptr));
+
     std::mt19937 gen(seed);
-    std::normal_distribution<T> dist(0.0f, 1.0f);
 
+    // Large variance for spacing
+    std::normal_distribution<T> dist_diag(0.0f, 20.0f);
+    std::normal_distribution<T> dist_off(0.0f, 20.0f);
 
-    int N = state_size;
-    int n = knot_points;
+    int N   = state_size;
+    int n   = knot_points;
     int dim = N * n;
-
 
     T* A = new T[dim * dim];
     for (int i = 0; i < dim * dim; ++i)
-        A[i] = 0.0f;
+        A[i] = T(0);
 
-    // Building bloc per Bloc
+    // ==============================
+    // BUILD BLOCKS
+    // ==============================
     for (int k = 0; k < n; ++k) {
-        // ---- Bloc diagonal D_k ----
+
+        // --------------------------
+        // DIAGONAL BLOCK D_k = R^T R + alpha*I
+        // --------------------------
         std::vector<T> R(N * N);
         for (int i = 0; i < N * N; ++i)
-            R[i] = dist(gen);
+            R[i] = dist_diag(gen);
 
-        // D_k = R^T * R + N * I
+        T* D = new T[N*N];
+        for (int i = 0; i < N * N; ++i)
+            D[i] = 0;
+
         for (int i = 0; i < N; ++i) {
             for (int j = 0; j < N; ++j) {
-                T sum = 0.0f;
+                T sum = 0;
                 for (int t = 0; t < N; ++t)
-                    sum += R[t * N + i] * R[t * N + j]; // R^T * R
+                    sum += R[t*N + i] * R[t*N + j];
+
                 if (i == j)
-                    sum += N;  // SPD reinforcement
-                A[(k*N + i) * dim + (k*N + j)] = sum;
+                    sum += N;    // local SPD boost
+
+                D[i*N + j] = sum;
             }
         }
 
-        // ---- Bloc O_k ----
+        // Copy D_k into global matrix A
+        for (int i = 0; i < N; ++i)
+            for (int j = 0; j < N; ++j)
+                A[(k*N + i)*dim + (k*N + j)] = D[i*N + j];
+
+        delete[] D;
+
+        // --------------------------
+        // OFF-DIAGONAL BLOCK O_k
+        // --------------------------
         if (k < n - 1) {
             std::vector<T> O(N * N);
             for (int i = 0; i < N * N; ++i)
-                O[i] = 0.1f * dist(gen);
+                O[i] = dist_off(gen) * 8.0f;   // Large values but controlled
 
-            // fill A
+            // Insert O_k and O_k^T
             for (int i = 0; i < N; ++i) {
                 for (int j = 0; j < N; ++j) {
-                    A[(k*N + i) * dim + ((k+1)*N + j)] = O[i*N + j];  // O_k
-                    A[((k+1)*N + j) * dim + (k*N + i)] = O[i*N + j];  // O_k^T
+                    T val = O[i*N + j];
+                    A[(k*N + i)     * dim + ((k+1)*N + j)] = val;
+                    A[((k+1)*N + j) * dim + (k*N + i)]     = val;
                 }
             }
         }
     }
 
-    // ---- SPD global ----
+    // ==============================
+    // GLOBAL SPD ENFORCEMENT
+    // ==============================
+    // We add a large diagonal shift proportional
+    // to the norm of off-diagonal coupling.
+    // This guarantees global SPD even with strong O_k.
+    // ==============================
+
+    // Compute diagonal boost = max row sum of |A|
+    T diag_boost = (T)0;
+    for (int i = 0; i < dim; ++i) {
+        T row_sum = 0;
+        for (int j = 0; j < dim; ++j)
+            row_sum += std::abs(A[i*dim + j]);
+        if (row_sum > diag_boost)
+            diag_boost = row_sum;
+    }
+
+    // Add boost to diagonal
     for (int i = 0; i < dim; ++i)
-        A[i * dim + i] += 1e-3f;
+        A[i * dim + i] += diag_boost + (T)1;
 
     return A;
 }
 
 // Generates a vector (T* b) 
 template<typename T>
-T* generate_random_vector(int dim, unsigned int seed = 0) {
-  
+T* generate_random_vector(uint32_t dim, unsigned int seed = 0) {
     if (seed == 0)
       seed = static_cast<unsigned int>(std::time(nullptr));
     std::mt19937 gen(seed);
-    std::normal_distribution<T> dist(0.0f, 1.0f);
+    std::normal_distribution<T> dist(0.0f, 200.0f);
 
     T* b = new T[dim];
 
-    for (int i = 0; i < dim; ++i) {
-        b[i] = dist(gen);
+    for (uint32_t i = 0; i < dim; ++i) {
+      b[i] = dist(gen);
     }
 
     return b;

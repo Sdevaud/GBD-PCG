@@ -1,10 +1,10 @@
 import numpy as np
 import sys
 import time
+from scipy.sparse import lil_matrix, csc_matrix
+from scipy.sparse.linalg import spsolve
 
-import numpy as np
-
-def generate_spd_block_tridiagonal(state, horizon, seed=None):
+def generate_spd_block_tridiagonal_sparse(state, horizon, seed=None):
     """
     Génère une matrice bloc-tridiagonale symétrique définie positive (SPD)
     de taille (state * horizon) × (state * horizon).
@@ -19,30 +19,31 @@ def generate_spd_block_tridiagonal(state, horizon, seed=None):
     Où chaque bloc Dk, Ok ∈ R^(state × state).
     """
     if seed is not None:
-        np.random.seed(seed)
+      np.random.seed(seed)
 
-    N = state       # taille d’un bloc
-    n = horizon     # nombre de blocs diagonaux
-    dim = N * n     # taille totale de la matrice
+    N = state
+    n = horizon
+    dim = N * n
 
-    A = np.zeros((dim, dim))
+    A = lil_matrix((dim, dim))  # Sparse modifiable
 
     for k in range(n):
         # Bloc diagonal D_k (SPD)
         R = np.random.randn(N, N)
-        Dk = R.T @ R + N * np.eye(N)  # SPD localement
+        Dk = R.T @ R + N * np.eye(N)
+
         A[k*N:(k+1)*N, k*N:(k+1)*N] = Dk
 
-        # Bloc hors-diagonal O_k (liaison entre D_k et D_{k+1})
+        # Bloc hors-diagonal O_k
         if k < n - 1:
             Ok = np.random.randn(N, N) * 0.1
             A[k*N:(k+1)*N, (k+1)*N:(k+2)*N] = Ok
             A[(k+1)*N:(k+2)*N, k*N:(k+1)*N] = Ok.T
 
-    # Renforcement pour s'assurer que A est bien SPD globalement
+    # Renforce SPD
     A += 1e-3 * np.eye(dim)
 
-    return A
+    return A.tocsc()  # format efficace pour spsolve()
 
 def main():
     if len(sys.argv) < 3:
@@ -52,17 +53,18 @@ def main():
     state = int(sys.argv[1])
     horizon = int(sys.argv[2])
 
-    # Génération de A SPD bloc-tridiagonale
-    A = generate_spd_block_tridiagonal(state, horizon)
+    # Génération sparse de A
+    A = generate_spd_block_tridiagonal_sparse(state, horizon)
     b = np.random.randn(state * horizon)
 
-    # Résolution et mesure du temps
+    # Résolution sparse + timing
     start = time.perf_counter()
-    x = np.linalg.solve(A, b)
+    x = spsolve(A, b)
     end = time.perf_counter()
 
-    exec_time_ms = (end - start) * 1000  # en millisecondes
-    print(f"{exec_time_ms:.6f}")  # seul le temps est imprimé (pour le benchmark)
+    exec_time_ms = (end - start) * 1000
+    print(f"{exec_time_ms:.6f}")
+
 
 def show_matrix(A, precision=2):
     """

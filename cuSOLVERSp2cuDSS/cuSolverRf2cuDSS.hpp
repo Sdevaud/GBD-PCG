@@ -58,7 +58,6 @@ void show_usage(const std::string &exec_name) {
   std::cout << "usage: " << exec_name << " --solver <cudss;cusolver> --file <filename> --timer --verbose\n";
   std::cout << "  --solver : select a linear solver; cudss, cusolver\n";
   std::cout << "  --file : sparse matrix input as a matrix market format\n";
-  std::cout << "  --single-api,-s : use a single api for linear solve if available; \n";        
   std::cout << "  --timer,-t : enable timer to measure solver phases\n";  
   std::cout << "  --verbose,-v : verbose flag\n";
   std::cout << "  --help,-h : print usage\n";  
@@ -76,7 +75,6 @@ int driver(int argc, char * argv[]) {
   /// 
   int use_cudss(0);
   int use_timer(0);
-  int use_single_api(0);
   std::string filename = arith_traits_t<value_type>::is_complex ? "test_complex.mtx" : "test_real.mtx";
   int verbose(0);  
   
@@ -94,9 +92,6 @@ int driver(int argc, char * argv[]) {
       filename = std::string(opt_val);
     }
     
-    if (parse_cmdline(argc, argv, "--single-api") || parse_cmdline(argc, argv, "-s")) {
-      use_single_api = 1;
-    }
     if (parse_cmdline(argc, argv, "--timer") || parse_cmdline(argc, argv, "-t")) {
       use_timer = 1;
     }
@@ -106,9 +101,8 @@ int driver(int argc, char * argv[]) {
   }
   
   std::cout << "-- commandline input\n";
-  std::cout << "   solver: " << (use_cudss ? "cudss, hpd" : "cusolversp, cholesky") << "\n";
+  std::cout << "   solver: " << (use_cudss ? "cudss, general" : "cusolversp, lu host") << "\n";
   std::cout << "   filename: " << filename << "\n";
-  std::cout << "   mode: " << (use_single_api ? "single api for linear-solve" : "phase-separated api e.g., analysis, factorize, solve") << "\n";  
   std::cout << "   timer: " << (use_timer ? "enabled" : "disabled") << "\n";  
   std::cout << "   verbose: " << verbose << "\n";
 
@@ -128,17 +122,17 @@ int driver(int argc, char * argv[]) {
     /// CUSOLVERSP init/finalization
     cusolverSpHandle_t cusolversp;
     cusparseMatDescr_t descriptor;    
-    csrcholInfo_t chol_info;
+    csrluInfoHost_t lu_info;
 
     CUSOLVER_CHECK(cusolverSpCreate(&cusolversp));
-    CUSOLVER_CHECK(cusolverSpCreateCsrcholInfo(&chol_info));
+    CUSOLVER_CHECK(cusolverSpCreateCsrluInfoHost(&lu_info));
     
     CUSPARSE_CHECK(cusparseCreateMatDescr(&descriptor));        
 
     auto cusolver_finalize = [&]() {
       CUSPARSE_CHECK(cusparseDestroyMatDescr(descriptor));      
       
-      CUSOLVER_CHECK(cusolverSpDestroyCsrcholInfo(chol_info));      
+      CUSOLVER_CHECK(cusolverSpDestroyCsrluInfoHost(lu_info));      
       CUSOLVER_CHECK(cusolverSpDestroy(cusolversp));
     };
 
@@ -211,7 +205,7 @@ int driver(int argc, char * argv[]) {
     h_perm.resize(m);
     h_peri.resize(m);
 
-    /// Explicit reordering for cusolver; cudss does not need this process
+    /// Explicit reordering for cusolver; cudss does not need this process as it is included into the analysis phase
     if (!use_cudss) {
       CUSOLVER_CHECK(cusolverSpXcsrmetisndHost(cusolversp, m, nnz, descriptor,                                           
                                                h_ap.data(), h_aj.data(),
@@ -304,7 +298,7 @@ int driver(int argc, char * argv[]) {
                                        d_aj, d_ax, 
                                        CUDA_R_32I,
                                        cuda_data_type,
-                                       CUDSS_MTYPE_HPD,
+                                       CUDSS_MTYPE_GENERAL, 
                                        CUDSS_MVIEW_FULL,
                                        CUDSS_BASE_ZERO));
       CUDSS_CHECK(cudssMatrixCreateDn(&obj_x, m, 1, m, d_x, cuda_data_type, CUDSS_LAYOUT_COL_MAJOR));
@@ -346,84 +340,61 @@ int driver(int argc, char * argv[]) {
       /// Step 4.b.0: cusolversp does not exploit matrix objects
       ///
 
-      if (use_single_api) {
+      {
         ///
-        /// Step 4.b.1-4: Solve the linear system via sparse cholesky factorization
+        /// Note that cusolverSpXcsrlsvluHost cannot be used when it is assumed to be used in cusolverRf
+        /// as the single api interface cleans the internal state 
         ///
         std::unique_ptr<timer_measurement_t> timer(new timer_measurement_t("cusolversp::linear-solve", stream, use_timer));
-        const magnitude_type tol(epsilon*1e3);
-        int singularity(0), reorder(0);            
-        CUSOLVER_CHECK(cusolverSpXcsrlsvchol(cusolversp,
-                                             m, nnz,
-                                             descriptor,
-                                             reinterpret_cast<const cuda_value_type*>(d_ax),
-                                             reinterpret_cast<const int*>(d_ap),
-                                             reinterpret_cast<const int*>(d_aj),
-                                             reinterpret_cast<const cuda_value_type*>(d_b),
-                                             tol, reorder,
-                                             reinterpret_cast<cuda_value_type*>(d_x),
-                                             &singularity));        
-      } else {
+        const magnitude_type tol(epsilon*1e3), pivot_threshold(1.0);
+
         ///
-        /// Step 4.b.1: Analyze fills
+        /// Step 4.b.1: Analyze fills and allocate workspace
         ///
-        {
-          std::unique_ptr<timer_measurement_t> timer(new timer_measurement_t("cusolversp::analyze", stream, use_timer));                        
-          CUSOLVER_CHECK(cusolverSpXcsrcholAnalysis(cusolversp,
-                                                    m, nnz, descriptor,
-                                                    d_ap, d_aj,
-                                                    chol_info));
-        }
-        
+        CUSOLVER_CHECK(cusolverSpXcsrluAnalysisHost(cusolversp,
+                                                    m, nnz,
+                                                    descriptor, h_ap.data(), h_aj.data(), lu_info));
+
+        size_t internal_data_in_bytes(0), buffer_size_in_bytes(0);
+        CUSOLVER_CHECK(cusolverSpXcsrluBufferInfoHost(cusolversp,
+                                                      m, nnz,
+                                                      descriptor, h_ax.data(), h_ap.data(), h_aj.data(),
+                                                      lu_info,
+                                                      &internal_data_in_bytes,
+                                                      &buffer_size_in_bytes));
+        std::vector<char> workspace_csrlu(buffer_size_in_bytes);
+
         ///
         /// Step 4.b.2: Factorize
         ///
-        size_t not_used, workspace_in_bytes;
-        CUSOLVER_CHECK(cusolverSpXcsrcholBufferInfo(cusolversp,
-                                                    m, nnz, descriptor,
-                                                    reinterpret_cast<cuda_value_type*>(d_ax),
-                                                    d_ap, d_aj,
-                                                    chol_info,
-                                                    &not_used, &workspace_in_bytes));
-        
-        void *d_workspace;
-        CUDA_CHECK(cudaMalloc(&d_workspace, workspace_in_bytes));
-        CUDA_CHECK(cudaStreamSynchronize(stream));      
-        {
-          std::unique_ptr<timer_measurement_t> timer(new timer_measurement_t("cusolversp::factorize", stream, use_timer));
-          CUSOLVER_CHECK(cusolverSpXcsrcholFactor(cusolversp,
-                                                  m, nnz, descriptor,
-                                                  reinterpret_cast<cuda_value_type*>(d_ax),
-                                                  d_ap, d_aj,
-                                                  chol_info,
-                                                  d_workspace));
-        }
-        
+        CUSOLVER_CHECK(cusolverSpXcsrluFactorHost(cusolversp,
+                                                  m, nnz,
+                                                  descriptor,
+                                                  reinterpret_cast<const cuda_value_type*>(h_ax.data()),
+                                                  reinterpret_cast<const ordinal_type*>(h_ap.data()),
+                                                  reinterpret_cast<const ordinal_type*>(h_aj.data()),
+                                                  lu_info,
+                                                  pivot_threshold,
+                                                  reinterpret_cast<void*>(workspace_csrlu.data())));
+
         ///
         /// Step 4.b.3: Solve
         ///
-        {
-          std::unique_ptr<timer_measurement_t> timer(new timer_measurement_t("cusolversp::solve", stream, use_timer));
-          CUSOLVER_CHECK(cusolverSpXcsrcholSolve(cusolversp,
-                                                 m,
-                                                 reinterpret_cast<cuda_value_type*>(d_b),
-                                                 reinterpret_cast<cuda_value_type*>(d_x),
-                                                 chol_info,
-                                                 d_workspace));
-        }        
-        
-        ///
-        /// Step 4.a.4: Free workspace
-        ///
-        CUDA_CHECK(cudaStreamSynchronize(stream));      
-        CUDA_CHECK(cudaFree(d_workspace));
+        CUSOLVER_CHECK(cusolverSpXcsrluSolveHost(cusolversp, m, h_b.data(), h_x.data(),
+                                                 lu_info,
+                                                 reinterpret_cast<void*>(workspace_csrlu.data())));
       }
     }
 
     /// 
     /// Step 5: Transfer data from device to host
-    /// 
-    CUDA_CHECK(cudaMemcpyAsync(h_x.data(), d_x, sizeof(value_type)*h_x.size(), cudaMemcpyDeviceToHost, stream));        
+    ///
+    if (verbose) {
+      std::cout << "-- checking solution after lu factorization\n";
+    }    
+    if (use_cudss) {
+      CUDA_CHECK(cudaMemcpyAsync(h_x.data(), d_x, sizeof(value_type)*h_x.size(), cudaMemcpyDeviceToHost, stream));
+    }
     CUDA_CHECK(cudaStreamSynchronize(stream));
 
     /// permute solution; x := P^{-1} x
@@ -437,24 +408,203 @@ int driver(int argc, char * argv[]) {
     ///
     /// Step 6: Compute residual and check the solution
     ///
-    std::vector<value_type> h_r(h_x.size());
-    compute_r_is_Ax_minus_b(m, n,
-                            h_ap, h_aj, h_ax,
-                            h_x, 
-                            h_b,
-                            h_r);
-    if (verbose) {
-      show_vector("r", m, h_r);      
+    {
+      std::vector<value_type> h_r(h_x.size());
+      compute_r_is_Ax_minus_b(m, n,
+                              h_ap, h_aj, h_ax,
+                              h_x, 
+                              h_b,
+                              h_r);
+      if (verbose) {
+        show_vector("r", m, h_r);      
+      }
+      
+      const double norm_A = compute_norm(h_ax);
+      const double norm_r = compute_norm(h_r);
+      
+      std::cout << "-- |A| = " << norm_A << ", "
+                << "|Ax-b| = " << norm_r << ", "
+                << "|Ax-b|/|A| = " << (norm_r / norm_A) << "\n";
+    }
+    
+    ///
+    /// Step 7: Pertub the diagonal of the input matrix for a testing purpose of refactorization
+    ///
+    {
+      std::vector<value_type> h_delta_x(m, value_type(0.1));
+      perturb_diag_A(m, n,
+                     h_ap, h_aj, h_ax,
+                     h_delta_x);
+      if (verbose) {
+        show_csr("modified_A", m, n, h_ap, h_aj, h_ax);
+      }
+
+      /// copy to device
+      CUDA_CHECK(cudaMemcpyAsync(d_ax, h_ax.data(), sizeof(value_type)*h_ax.size(), cudaMemcpyHostToDevice, stream));
+      CUDA_CHECK(cudaStreamSynchronize(stream));
+
+      std::cout << "-- the entries of A are modified\n";        
     }
 
-    const double norm_A = compute_norm(h_ax);
-    const double norm_r = compute_norm(h_r);
+    ///
+    /// Step 8: Refactorization
+    ///
+    if (use_cudss) {
+      ///
+      /// Step 8.a.0: Create matrix objects; these can be reused from previous solve iterations via cudssMatrixSetValues()
+      ///
+      cudssMatrix_t obj_A, obj_x, obj_b;  
+      CUDSS_CHECK(cudssMatrixCreateCsr(&obj_A,
+                                       m, n, nnz,
+                                       d_ap, nullptr,
+                                       d_aj, d_ax, 
+                                       CUDA_R_32I,
+                                       cuda_data_type,
+                                       CUDSS_MTYPE_GENERAL, 
+                                       CUDSS_MVIEW_FULL,
+                                       CUDSS_BASE_ZERO));
+      CUDSS_CHECK(cudssMatrixCreateDn(&obj_x, m, 1, m, d_x, cuda_data_type, CUDSS_LAYOUT_COL_MAJOR));
+      CUDSS_CHECK(cudssMatrixCreateDn(&obj_b, m, 1, m, d_b, cuda_data_type, CUDSS_LAYOUT_COL_MAJOR));
 
-    std::cout << "-- |A| = " << norm_A << ", "
-              << "|Ax-b| = " << norm_r << ", "
-              << "|Ax-b|/|A| = " << (norm_r / norm_A) << "\n";
+      CUDA_CHECK(cudaStreamSynchronize(stream));
 
+      ///
+      /// Step 8.a.1: Skip the Analyze phase
+      ///
+      
+      ///
+      /// Step 8.a.2: Factorize
+      ///
+      {
+        std::unique_ptr<timer_measurement_t> timer(new timer_measurement_t("cudss:refactorize", stream, use_timer));        
+        CUDSS_CHECK(cudssExecute(cudss, CUDSS_PHASE_REFACTORIZATION, config, data, obj_A, obj_x, obj_b));
+      }
+      ///
+      /// Step 8.a.3: Solve
+      ///
+      {
+        std::unique_ptr<timer_measurement_t> timer(new timer_measurement_t("cudss:solve", stream, use_timer));                
+        CUDSS_CHECK(cudssExecute(cudss, CUDSS_PHASE_SOLVE, config, data, obj_A, obj_x, obj_b));            
+      }
+      CUDA_CHECK(cudaStreamSynchronize(stream));      
+    
+      ///
+      /// Step 8.a.4: Free objects
+      /// 
+      CUDSS_CHECK(cudssMatrixDestroy(obj_A));      
+      CUDSS_CHECK(cudssMatrixDestroy(obj_b));
+      CUDSS_CHECK(cudssMatrixDestroy(obj_x));      
+    } else {
+      /// Step 8.b.0: Create cusolver rf handle 
+      cusolverRfHandle_t cusolverrf;
 
+      /// note that cusolverrf does not have cusolverRfSetStream API and it relies on the default stream
+      CUSOLVER_CHECK(cusolverRfCreate(&cusolverrf));
+      auto cusolverrf_finalize = [&]() {
+        CUSOLVER_CHECK(cusolverRfDestroy(cusolverrf));
+      };
+
+      /// Step 8.b.1: Extract the internal work array 
+      ordinal_type nnz_l(0), nnz_u(0);
+      CUSOLVER_CHECK(cusolverSpXcsrluNnzHost(cusolversp, &nnz_l, &nnz_u,lu_info));
+
+      /// lower and upper part of factors in a csr matrix form
+      std::vector<ordinal_type> h_lp(m+1), h_up(m+1);
+      std::vector<ordinal_type> h_lj(nnz_l), h_uj(nnz_u);
+      std::vector<value_type> h_lx(nnz_l), h_ux(nnz_u);
+      std::vector<ordinal_type> h_p(m), h_q(m); /// permutation vectors
+      CUSOLVER_CHECK(cusolverSpXcsrluExtractHost(cusolversp,
+                                                 h_p.data(), h_q.data(),
+                                                 descriptor, h_lx.data(), h_lp.data(), h_lj.data(),
+                                                 descriptor, h_ux.data(), h_up.data(), h_uj.data(),
+                                                 lu_info, nullptr));
+      
+      /// Step 8.b.2: Set matrix
+      CUSOLVER_CHECK(cusolverRfSetMatrixFormat(cusolverrf,
+                                               CUSOLVERRF_MATRIX_FORMAT_CSR,
+                                               CUSOLVERRF_UNIT_DIAGONAL_ASSUMED_L));
+      CUSOLVER_CHECK(cusolverRfSetupHost(m, 
+                                         nnz, h_ap.data(), h_aj.data(), h_ax.data(),
+                                         nnz_l, h_lp.data(), h_lj.data(), h_lx.data(),
+                                         nnz_u, h_up.data(), h_uj.data(), h_ux.data(),
+                                         h_p.data(), h_q.data(),
+                                         cusolverrf));
+
+      /// Step 8.b.3: Analyze
+      CUSOLVER_CHECK(cusolverRfAnalyze(cusolverrf));
+
+      /// Step 8.b.4: Reset values to device
+      ordinal_type *d_p, *d_q;
+      CUDA_CHECK(cudaMalloc(reinterpret_cast<void **>(&d_p), sizeof(ordinal_type)*m));
+      CUDA_CHECK(cudaMalloc(reinterpret_cast<void **>(&d_q), sizeof(ordinal_type)*m));
+
+      /// note that it is assumed that the same pivot sequence can factorize the matrix without having a null pivot 
+      CUDA_CHECK(cudaMemcpy(d_p, h_p.data(), sizeof(ordinal_type)*m, cudaMemcpyHostToDevice));
+      CUDA_CHECK(cudaMemcpy(d_q, h_q.data(), sizeof(ordinal_type)*m, cudaMemcpyHostToDevice));
+
+      CUSOLVER_CHECK(cusolverRfResetValues(m, nnz, d_ap, d_aj, d_ax, d_q, d_q, cusolverrf));
+      
+      /// Step 8.b.5: Refactorize
+      CUSOLVER_CHECK(cusolverRfRefactor(cusolverrf));
+
+      /// allocate temporary rhs vector and set x := b, x will be overwritten by a solution vector
+      const ordinal_type nrhs = 1;
+      value_type *d_tmp;
+      CUDA_CHECK(cudaMalloc(reinterpret_cast<void **>(&d_tmp), sizeof(value_type)*m));
+      CUDA_CHECK(cudaMemcpy(d_x, d_b, sizeof(value_type)*m, cudaMemcpyDeviceToDevice));
+      
+      CUSOLVER_CHECK(cusolverRfSolve(cusolverrf, d_p, d_q, nrhs, d_tmp, m, d_x, m));
+      CUDA_CHECK(cudaDeviceSynchronize());
+
+      CUDA_CHECK(cudaFree(reinterpret_cast<void*>(d_tmp)));      
+      CUDA_CHECK(cudaFree(reinterpret_cast<void*>(d_p)));
+      CUDA_CHECK(cudaFree(reinterpret_cast<void*>(d_q)));
+  
+      cusolverrf_finalize();
+    }
+    std::cout << "-- A is refactorized\n";
+    
+    /// 
+    /// Step 9: Transfer data from device to host
+    ///
+    if (verbose) {
+      std::cout << "-- checking solution after refactorization\n";
+    }
+    
+    CUDA_CHECK(cudaDeviceSynchronize());    
+    CUDA_CHECK(cudaMemcpyAsync(h_x.data(), d_x, sizeof(value_type)*h_x.size(), cudaMemcpyDeviceToHost, stream));
+    CUDA_CHECK(cudaStreamSynchronize(stream));
+
+    /// permute solution; x := P^{-1} x
+    if (!use_cudss) {
+      std::vector<value_type> h_tmp = h_x;
+      std::transform(h_peri.begin(), h_peri.end(), h_x.begin(), 
+                     [&h_tmp](ordinal_type idx) { return h_tmp[idx]; });
+      h_x = h_tmp;      
+    }
+    
+    ///
+    /// Step 10: Compute residual and check the solution
+    ///
+    {
+      std::vector<value_type> h_r(h_x.size());
+      compute_r_is_Ax_minus_b(m, n,
+                              h_ap, h_aj, h_ax,
+                              h_x, 
+                              h_b,
+                              h_r);
+      if (verbose) {
+        show_vector("r", m, h_r);      
+      }
+      
+      const double norm_A = compute_norm(h_ax);
+      const double norm_r = compute_norm(h_r);
+      
+      std::cout << "-- |A| = " << norm_A << ", "
+                << "|Ax-b| = " << norm_r << ", "
+                << "|Ax-b|/|A| = " << (norm_r / norm_A) << "\n";
+    }
+      
     ///
     /// Step 7: Finalize cuda instances and memory
     ///

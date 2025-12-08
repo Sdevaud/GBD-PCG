@@ -5,10 +5,32 @@
 #include <cuda_runtime.h>
 #include <cusolverDn.h>
 #include <iostream>
-#include <vector>
 #include "generate_A_SPD.cuh"
 #include "cu_solver.cuh"
 
+#ifndef STATE_SIZE
+#define STATE_SIZE 40
+#endif
+
+#ifndef KNOT_POINTS
+#define KNOT_POINTS 100
+#endif
+
+#ifndef BENCHMARK
+#define BENCHMARK 0
+#endif
+
+#ifndef MEMPCY
+#define MEMPCY 0
+#endif
+
+#ifndef DEBUG
+#define DEBUG 0
+#endif
+
+#ifndef OPTIMISED
+#define OPTIMISED 0
+#endif
 
 template<typename T>
 void run_benchmark(const uint32_t state_size, const uint32_t knot_points) {
@@ -45,15 +67,10 @@ void run_benchmark(const uint32_t state_size, const uint32_t knot_points) {
   free(h_gamma);
 }
 
-int main(int argc, char* argv[]) {
+int main() {
 
-  if (argc < 3) {
-      std::cerr << "Usage: " << argv[0] << " <state> <horizon>" << std::endl;
-      return 1;
-  }
-
-  const uint32_t state_size   = std::atoi(argv[1]);
-  const uint32_t knot_points = std::atoi(argv[2]);
+  const uint32_t state_size   = STATE_SIZE;
+  const uint32_t knot_points = KNOT_POINTS;
 
   run_benchmark<double>(state_size, knot_points);
 

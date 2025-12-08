@@ -4,11 +4,11 @@
 #include <cuda_runtime.h>
 
 #ifndef STATE_SIZE
-#define STATE_SIZE 5
+#define STATE_SIZE 3
 #endif
 
 #ifndef KNOT_POINTS
-#define KNOT_POINTS 1000
+#define KNOT_POINTS 4
 #endif
 
 #ifndef PCG_TYPE
@@ -16,29 +16,40 @@
 #endif
 
 #ifndef PRECOND_POLY_ORDER
-#define PRECOND_POLY_ORDER 0 // now supports poly_order = 0, 1, 2, bigger number will not make a huge difference
+#define PRECOND_POLY_ORDER false // now supports poly_order = 0, 1, 2, bigger number will not make a huge difference
 #endif
 
 #ifndef CHOL_OR_LDL
 #define CHOL_OR_LDL false
 #endif
 
-#ifndef BENCHMARK
-#define BENCHMARK 0
-#endif
-
-#ifndef MEMPCY
-#define MEMPCY 0
-#endif
-
 #ifndef DEBUG
-#define DEBUG 0
+#define DEBUG false
 #endif
 
 #ifndef OPTIMISED
-#define OPTIMISED 1
+#define OPTIMISED false
 #endif
 
+#ifndef TIME_EXECUTION_DOUBLE
+#define TIME_EXECUTION_DOUBLE false
+#endif
+
+#ifndef TIME_EXECUTION_FLOAT
+#define TIME_EXECUTION_FLOAT false
+#endif
+
+#ifndef ERROR_DOUBLE
+#define ERROR_DOUBLE false
+#endif
+
+#ifndef ERROR_FLOAT
+#define ERROR_FLOAT false
+#endif
+
+#ifndef NBR_ITERATION
+#define NBR_ITERATION 10000
+#endif
 
 namespace pcg_constants
 {
