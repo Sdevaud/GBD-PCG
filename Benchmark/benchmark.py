@@ -286,7 +286,7 @@ def compute_run(nbr_run, model_states_sizes, methods, method_paths, model_knot_p
                         compiler = "nvcc"
                         compile_cmd = (
                             f"{compiler} --compiler-options -Wall -O3 -std=c++17 "
-                            f"-DBENCHMARK=1 -DDEBUG=0 -DMEMPCY=0 "
+                            f"-DBENCHMARK=1 -DDEBUG=0 -DMEMPCY=1 "
                             f"-DSTATE_SIZE={size} -DKNOT_POINTS={knot_point} "
                             f"-I../include -I../GLASS -I./include "
                             f"{src_cu} -o {exe_name}"
@@ -337,11 +337,12 @@ def save_data_plot(nbr_run, model_states_sizes, methods, method_paths, model_kno
 def benchmark():
 
   nbr_run = 50
-  methods = ["numpy", "eigen", "pcg_no_gpu", "pcg_no_precond", "pcg_precond"]
+  # methods = ["numpy", "eigen", "pcg_no_gpu", "pcg_no_precond", "pcg_precond"]
+  methods = ["pcg_no_precond", "pcg_precond"]
   method_paths = {
-    "numpy": "linlag.py",
-    "eigen": "./eigen/eigen.cpp",
-    "pcg_no_gpu": "./CG_no_GPU/benchmark_CG_no_GPU.cu",
+    # "numpy": "linlag.py",
+    # "eigen": "./eigen/eigen.cpp",
+    # "pcg_no_gpu": "./CG_no_GPU/benchmark_CG_no_GPU.cu",
     "pcg_no_precond" : "./CG_no_precond/CG_no_precond.cu",
     "pcg_precond" : "./CG_precond/CG_precond.cu"
   }
@@ -367,5 +368,5 @@ def benchmark_only_plot() :
 
 
 if __name__ == "__main__":
-  benchmark()
-  # benchmark_only_plot()
+  # benchmark()
+  benchmark_only_plot()

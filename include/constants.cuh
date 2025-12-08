@@ -36,7 +36,7 @@
 #endif
 
 #ifndef OPTIMISED
-#define OPTIMISED 0
+#define OPTIMISED 1
 #endif
 
 
