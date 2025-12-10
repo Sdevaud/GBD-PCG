@@ -18,10 +18,10 @@ template<typename T>
 T compute_alpha(const T* A, const T* P, T* AP, 
   const T* r, int size, int k, T& alpha_num) {
 
-  T  alpha_denom = 0.0f;
+  T  alpha_denom(0);
 
   for (int i = 0; i < size; ++i) {
-    AP[i] = 0.0f;
+    AP[i] = 0;
     for (int j = 0; j < size; ++j) {
       alpha_denom += P[i] * A[i*size +j] * P[j];
       AP[i] += A[i*size +j] * P[j];
@@ -30,7 +30,7 @@ T compute_alpha(const T* A, const T* P, T* AP,
   }
 
 
-
+  printf("alpha : %f \n", alpha_denom);
   return alpha_num / alpha_denom;
 }
 
@@ -39,7 +39,7 @@ T compute_beta(const T* P, const T* AP,
   T* r, T* x, int size, T& alpha_num, T alpha) {
 
   T old_alpha_num = alpha_num;
-  alpha_num = 0.0f;
+  alpha_num = 0.0;
 
   for (int i = 0; i < size; ++i) {
     x[i] = x[i] + alpha * P[i];

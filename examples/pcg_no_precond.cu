@@ -3,7 +3,7 @@
 #include "gpu_pcg.cuh"
 #include "gpuassert.cuh"
 #include "read_array.h"
-#include "generate_A_SPD.cuh"
+#include "utils.h"
 #include <ctime>
 
 #define tic      double tic_t = clock();
@@ -60,8 +60,8 @@ void pcg_solve_example() {
     T *h_S;
     h_S = new T[3 * Nnx2];
     std::string file_name;
-    readArrayFromFile(3 * Nnx2, "data/S.txt", h_S);
-    readArrayFromFile(Nnx, "data/gamma.txt", h_gamma);
+    readArrayFromFile(3 * Nnx2, "data_1/S.txt", h_S);
+    readArrayFromFile(Nnx, "data_1/gamma.txt", h_gamma);
 
     struct pcg_config<T> config;
     config.pcg_org_trans = PCG_TYPE;

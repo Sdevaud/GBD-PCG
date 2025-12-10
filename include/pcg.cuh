@@ -337,8 +337,9 @@ void pcg(
         glass::reduce<T>(s_v_b, knot_points, d_v_temp);
         __syncthreads();
         alpha = eta / s_v_b[0];
+        // printf("alpha : %f \n", eta);
 
-        // lambda = lambda + alpha * p
+        // lambda = lambda + alpha * p  395.689162 
         // r = r - alpha * upsilon
         for (uint32_t ind = thread_id; ind < state_size; ind += block_dim) {
             s_lambda_b[ind] += alpha * s_p_b[ind];
@@ -389,8 +390,9 @@ void pcg(
         r_norm = pow(s_eta_new_b[0], 0.5);
 
         // check exit condition
-        if (r_norm / gamma_norm < exit_tol) {
+        if (r_norm < exit_tol) {
             iter++;
+            // printf("iter : %d \n", iter);
             max_iter_exit = false;
             break;
         }

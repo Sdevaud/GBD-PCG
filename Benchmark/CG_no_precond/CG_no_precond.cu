@@ -4,6 +4,7 @@
 #include <chrono>
 #include "gpu_pcg.cuh"
 #include "utils.h"
+#include "read_array.h"
 
 template<typename T>
 void run_benchmark(uint32_t state_size, uint32_t knot_points, unsigned int random = 0, const uint32_t nbr_iteration = 10) {
@@ -11,7 +12,7 @@ void run_benchmark(uint32_t state_size, uint32_t knot_points, unsigned int rando
   struct pcg_config<T> config;
   config.pcg_max_iter = nbr_iteration;
   config.pcg_org_trans = false;
-  config.pcg_poly_order = 0;
+  config.pcg_poly_order = false;
 
   // data generation
   T* S = generate_spd_block_tridiagonal<T>(state_size, knot_points, random);
@@ -42,10 +43,10 @@ void run_benchmark(uint32_t state_size, uint32_t knot_points, unsigned int rando
   #endif
 
   #if ERROR_DOUBLE or ERROR_FLOAT
-    T error(0.0);
-    error_computation<T>(S, h_gamma, h_lambda, Nnx, error);
-    print_error(error);
-    std::cout << nbr_iteration << std::endl << kernel_time_ms << std::endl;
+    // T error(0.0);
+    // error_computation<T>(S, h_gamma, h_lambda, Nnx, error);
+    // print_error(error);
+    std::cout << res << std::endl << kernel_time_ms << std::endl;
   #endif
 
   #if DEBUG
@@ -55,9 +56,16 @@ void run_benchmark(uint32_t state_size, uint32_t knot_points, unsigned int rando
     // T* Axb = (T*)calloc(Nnx, sizeof(T));
     // mat_mul_vector(S, h_lambda, Axb, Nnx);
     // printVector("S x h_lambda", Axb, Nnx);
-    bool test = is_spd(S, Nnx);
-    if (test) std::cout << "SPD \n";
-    else std::cout << "no SPD \n";
+    // bool test = is_spd(S, Nnx);
+    // if (test) std::cout << "SPD \n";
+    // else std::cout << "no SPD \n";
+    T norm = 0;
+    // printVector<T>("h_lambda", h_lambda, Nnx);
+    for (uint32_t i = 0; i < Nnx; i++) {
+        norm += h_lambda[i] * h_lambda[i];
+        h_lambda[i] = 0;
+    }
+    printf("result: lambda norm = %f, pcg iter = %d\n", sqrt(norm), res);
   #endif
 
   free(S);
