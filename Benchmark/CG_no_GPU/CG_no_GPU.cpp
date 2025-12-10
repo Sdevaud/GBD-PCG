@@ -2,9 +2,9 @@
 #include <stdlib.h>
 #include <cmath> 
 #include <chrono>
-#include "gpu_pcg.cuh"
-#include "generate_A_SPD.cuh"
-#include "CG_no_GPU.cuh"
+#include "utils.h"
+#include "CG_no_GPU.h"
+#include "constant.h"
 
 template<typename T>
 void run_benchmark(uint32_t state_size, uint32_t knot_points, unsigned int random = 0, const uint32_t nbr_iteration = 10) {
@@ -23,7 +23,8 @@ void run_benchmark(uint32_t state_size, uint32_t knot_points, unsigned int rando
 
   #if TIME_EXECUTION_DOUBLE or TIME_EXECUTION_FLOAT
     auto end = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<double, std::milli> exec_time = end - start;
+    std::chrono::duration<double, std::milli> exec_time_ms = end - start;
+    std::cout << exec_time_ms.count() << std::endl;
   #endif
 
   #if ERROR_DOUBLE or ERROR_FLOAT
@@ -34,12 +35,12 @@ void run_benchmark(uint32_t state_size, uint32_t knot_points, unsigned int rando
   #endif
 
   #if DEBUG
-    printMatrix("S", S, Nnx);
-    printVector("h_gamma", h_gamma, Nnx);
-    printVector("h_lambda", h_lambda, Nnx);
-    T* Axb = (T*)calloc(Nnx, sizeof(T));
-    mat_mul_vector(S, h_lambda, Axb, Nnx);
-    printVector("S x h_lambda", Axb, Nnx);
+    // printMatrix("S", S, Nnx);
+    // printVector("h_gamma", h_gamma, Nnx);
+    // printVector("h_lambda", h_lambda, Nnx);
+    // T* Axb = (T*)calloc(Nnx, sizeof(T));
+    // mat_mul_vector(S, h_lambda, Axb, Nnx);
+    // printVector("S x h_lambda", Axb, Nnx);
     bool test = is_spd(S, Nnx);
     if (test) std::cout << "SPD \n";
     else std::cout << "no SPD \n";

@@ -2,9 +2,6 @@ NVCC = nvcc
 
 # flags compilation
 CFLAGS = --compiler-options -Wall -O3 -std=c++17 \
--DBENCHMARK=1 \
--DDEBUG=0 \
--DMEMPCY=1 \
 -I../../include \
 -I../../GLASS \
 -I../include
@@ -15,7 +12,8 @@ SRC     = CG_precond.cu
 OBJ     = $(SRC:.cu=.o)
 TARGET  = CG_precond.exe
 
-all: $(TARGET)
+# Run clean before building
+all: clean $(TARGET)
 
 $(TARGET): $(OBJ)
 	$(NVCC) $(CFLAGS) $^ -o $@ $(LDFLAGS)

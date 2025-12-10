@@ -56,7 +56,6 @@ size_t pcgSharedMemSize(uint32_t state_size, uint32_t knot_points, bool org_tran
                                 max(state_size, knot_points));
         }
     }
-    // printf("[PCG] pcgSharedMemSize used = %zu bytes\n", ppcg_kernel_smem_size);
     return ppcg_kernel_smem_size;
 }
 

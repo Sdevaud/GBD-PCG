@@ -7,9 +7,6 @@
 #include <limits>
 using namespace std;
 
-#include <cmath>
-#include <iostream>
-
 template<typename T>
 bool is_spd(const T* A, int N) {
     // On fait une copie car le Cholesky modifie la matrice.
@@ -366,17 +363,17 @@ T* generate_random_vector(uint32_t dim, unsigned int seed = 0) {
 }
 
 template<typename T>
-T* extract_block(const T* A, int i, int size_bloc, int size_A) {
+T* extract_block(const T* A, uint32_t i, uint32_t size_bloc, uint32_t size_A) {
 
   T* block = new T[size_bloc * size_bloc];
 
-  int start_row = i / size_A;
-  int start_col = i % size_A;
+  uint32_t start_row = i / size_A;
+  uint32_t start_col = i % size_A;
 
-  for (int r = 0; r < size_bloc; ++r) {
-    for (int c = 0; c < size_bloc; ++c) {
-      int src_index = (start_row + r) * size_A + (start_col + c);
-      int dst_index = r * size_bloc + c;
+  for (uint32_t r = 0; r < size_bloc; ++r) {
+    for (uint32_t c = 0; c < size_bloc; ++c) {
+      uint32_t src_index = (start_row + r) * size_A + (start_col + c);
+      uint32_t dst_index = r * size_bloc + c;
       block[dst_index] = A[src_index];
     }
   }
@@ -402,19 +399,19 @@ T* matmul(const T* A, const T* B, int size) {
 }
 
 template<typename T>
-T* matinv(const T* A, int size) {
+T* matinv(const T* A, uint32_t size) {
     // Crée une copie locale de A car on va la modifier
     T* M = new T[size * size];
-    for (int i = 0; i < size * size; ++i)
+    for (uint32_t i = 0; i < size * size; ++i)
         M[i] = A[i];
 
     // Crée la matrice identité (pour construire l’inverse)
     T* I = new T[size * size];
-    for (int i = 0; i < size * size; ++i)
+    for (uint32_t i = 0; i < size * size; ++i)
         I[i] = (i / size == i % size) ? 1 : 0;
 
     // === Méthode de Gauss–Jordan ===
-    for (int k = 0; k < size; ++k) {
+    for (uint32_t k = 0; k < size; ++k) {
         // Trouve le pivot
         T pivot = M[k * size + k];
         if (pivot == 0) {
@@ -425,16 +422,16 @@ T* matinv(const T* A, int size) {
         }
 
         // Normalise la ligne du pivot
-        for (int j = 0; j < size; ++j) {
+        for (uint32_t j = 0; j < size; ++j) {
             M[k * size + j] /= pivot;
             I[k * size + j] /= pivot;
         }
 
         // Élimine les autres lignes
-        for (int i = 0; i < size; ++i) {
+        for (uint32_t i = 0; i < size; ++i) {
             if (i == k) continue;
             T factor = M[i * size + k];
-            for (int j = 0; j < size; ++j) {
+            for (uint32_t j = 0; j < size; ++j) {
                 M[i * size + j] -= factor * M[k * size + j];
                 I[i * size + j] -= factor * I[k * size + j];
             }
@@ -446,11 +443,11 @@ T* matinv(const T* A, int size) {
 }
 
 template<typename T>
-T* mat_transpose(const T* A, int rows, int cols) {
+T* mat_transpose(const T* A, uint32_t rows, uint32_t cols) {
     T* AT = new T[rows * cols];
 
-    for (int i = 0; i < rows; ++i) {
-        for (int j = 0; j < cols; ++j) {
+    for (uint32_t i = 0; i < rows; ++i) {
+        for (uint32_t j = 0; j < cols; ++j) {
             AT[j * rows + i] = A[i * cols + j];
         }
     }
@@ -460,13 +457,13 @@ T* mat_transpose(const T* A, int rows, int cols) {
 
 
 template<typename T>
-T* compute_D1inv_O1_D2inv(const T* D1, const T* D2, const T* O1, int nx) {
+T* compute_D1inv_O1_D2inv(const T* D1, const T* D2, const T* O1, uint32_t nx) {
   T* D1_inv = matinv<T>(D1, nx);
   T* D2_inv = matinv<T>(D2, nx);
   T* OD = matmul<T>(O1, D2_inv, nx);
   T* DOD = matmul<T>(D1_inv, OD, nx);
 
-  for (int i = 0; i < nx*nx; ++i) DOD[i] *=  -1;
+  for (uint32_t i = 0; i < nx*nx; ++i) DOD[i] *=  -1;
 
   delete[] D1_inv;
   delete[] D2_inv;
@@ -476,19 +473,19 @@ T* compute_D1inv_O1_D2inv(const T* D1, const T* D2, const T* O1, int nx) {
 }
 
 template<typename T>
-void copy_block_in_matrix(T* Pinv, T* block, int size_bloc, int index) {
-for (int i = 0; i < size_bloc; ++i) {
+void copy_block_in_matrix(T* Pinv, T* block, uint32_t size_bloc, uint32_t index) {
+for (uint32_t i = 0; i < size_bloc; ++i) {
     Pinv[index + i] = block[i];
   }
 }
 
 template<typename T>
-T* formPolyPreconditioner_Pinv(T* S, int N, int nx) {
+T* formPolyPreconditioner_Pinv(T* S, uint32_t N, uint32_t nx) {
 
-  int size_P = 3 * nx * nx * N;
+  uint32_t size_P = 3 * nx * nx * N;
   T* Pinv = (T*)calloc(size_P, sizeof(T));
 
-  for (int i = 0; i < N-1; ++i) {
+  for (uint32_t i = 0; i < N-1; ++i) {
     T* Di = extract_block<T>(S, i*nx*nx*N + i*nx, nx, N * nx);
     T* Oi = extract_block<T>(S, i*nx*nx*N + i*nx + nx, nx, N * nx);
     T* Di1 = extract_block<T>(S, (i+1)*nx*nx*N + (i+1)*nx, nx, N * nx);

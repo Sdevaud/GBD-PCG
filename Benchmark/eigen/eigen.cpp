@@ -5,27 +5,20 @@
 #include <Eigen/Dense>
 #include <Eigen/Sparse>
 #include <iostream>
-#include "generate_A_SPD.cuh"
-
-#ifndef STATE_SIZE
-#define STATE_SIZE 3
-#endif
-
-#ifndef KNOT_POINTS
-#define KNOT_POINTS 4
-#endif
+#include "utils.h"
+#include "constant.h"
 
 
 template <typename T>
-Eigen::SparseMatrix<T> denseToSparse(const T* dense, int n)
+Eigen::SparseMatrix<T> denseToSparse(const T* dense, uint32_t n)
 {
     // Création en format LIL, + efficace pour remplir une sparse
     Eigen::SparseMatrix<T> A_sparse(n, n);
     std::vector<Eigen::Triplet<T>> triplets;
     triplets.reserve(n * 10);  // estimation basse, ajustée ensuite
 
-    for (int i = 0; i < n; i++) {
-        for (int j = 0; j < n; j++) {
+    for (uint32_t i = 0; i < n; i++) {
+        for (uint32_t j = 0; j < n; j++) {
             T val = dense[i * n + j];
             if (val != T(0)) {
                 triplets.emplace_back(i, j, val);
@@ -40,7 +33,7 @@ Eigen::SparseMatrix<T> denseToSparse(const T* dense, int n)
 
 template<typename T>
 void run_benchmark(uint32_t state_size, uint32_t knot_points) {
-    const int Nnx = state_size * knot_points;
+    const uint32_t Nnx = state_size * knot_points;
 
     // Matrice full dense (remplie de zéros)
     T* h_S = generate_spd_block_tridiagonal<T>(state_size, knot_points);
@@ -65,18 +58,22 @@ void run_benchmark(uint32_t state_size, uint32_t knot_points) {
     std::chrono::duration<T, std::milli> exec_time_ms = end - start;
     std::cout << exec_time_ms.count() << std::endl;
 
-    std::cout << x << std::endl;
-
     free(h_S);
     free(h_gamma);
 }
 
 int main() {
 
-  const uint32_t state_size   = STATE_SIZE;
+  const uint32_t state_size = STATE_SIZE;
   const uint32_t knot_points = KNOT_POINTS;
 
-  run_benchmark<double>(state_size, knot_points);
+  #if TIME_EXECUTION_DOUBLE
+    run_benchmark<double>(state_size, knot_points);
+  #endif
+
+  #if TIME_EXECUTION_FLOAT
+    run_benchmark<float>(state_size, knot_points);
+  #endif
 
   return 0;
 }

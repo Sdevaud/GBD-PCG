@@ -1,26 +1,21 @@
 CXX     = g++
-NVCC = nvcc
 
-# flags compilation
-CFLAGS = --compiler-options -Wall -O3 -std=c++17 \
--I../../include \
--I../../GLASS \
--I../include
+CFLAGS  = -O3 -Wall -std=c++17 \
+          -I../include -I.. -I/usr/include/eigen3
 
 LDFLAGS = 
 
-SRC     = benchmark_CG_no_GPU.cpp
+SRC     = CG_no_GPU.cpp
 OBJ     = $(SRC:.cpp=.o)
-TARGET  = benchmark_CG_no_GPU.exe
+TARGET  = CG_no_GPU.exe
 
-# Run clean before building
 all: clean $(TARGET)
 
 $(TARGET): $(OBJ)
-	$(NVCC) $(CFLAGS) $^ -o $@ $(LDFLAGS)
+	$(CXX) $(CFLAGS) $^ -o $@
 
-%.o: %.cu
-	$(NVCC) $(CFLAGS) -c $< -o $@
+%.o: %.cpp
+	$(CXX) $(CFLAGS) -c $< -o $@
 
 clean:
-	rm -rf *.exe *.o
+	rm -f *.o *.exe

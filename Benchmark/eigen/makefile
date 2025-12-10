@@ -1,26 +1,19 @@
 CXX     = g++
-NVCC    = nvcc
 
-CFLAGS = --compiler-options -Wall -O3 -std=c++17 \
--I../../include \
--I../../GLASS \
--I../include \
--I/usr/include/eigen3
-
-LDFLAGS = 
+CFLAGS  = -O3 -Wall -std=c++17 \
+          -I../include -I.. -I/usr/include/eigen3
 
 SRC     = eigen.cpp
 OBJ     = $(SRC:.cpp=.o)
 TARGET  = eigen.exe
 
-# Run clean before building
 all: clean $(TARGET)
 
 $(TARGET): $(OBJ)
-	$(NVCC) $(CFLAGS) $^ -o $@ $(LDFLAGS)
+	$(CXX) $(CFLAGS) $^ -o $@
 
-%.o: %.cu
-	$(NVCC) $(CFLAGS) -c $< -o $@
+%.o: %.cpp
+	$(CXX) $(CFLAGS) -c $< -o $@
 
 clean:
-	rm -rf *.exe *.o
+	rm -f *.o *.exe
