@@ -3,7 +3,6 @@
 #include "gpu_pcg.cuh"
 #include "gpuassert.cuh"
 #include "read_array.h"
-#include "utils.h"
 #include <ctime>
 
 #define tic      double tic_t = clock();
@@ -41,9 +40,9 @@ void pcg_solve_example() {
         file_name = "data/H.txt";
         h_S = new T[3 * Nnx2];
         h_Pinv = new T[3 * Nnx2];
-        readArrayFromFile(3 * Nnx2, "data/S.txt", h_S);
+        readArrayFromFile(3 * Nnx2, "data/h_S.txt", h_S);
         readArrayFromFile(3 * Nnx2, "data/P.txt", h_Pinv);
-        readArrayFromFile(Nnx, "data/gamma.txt", h_gamma);
+        readArrayFromFile(Nnx, "data/h_gamma.txt", h_gamma);
     }
 
 

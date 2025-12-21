@@ -347,11 +347,6 @@ uint32_t solvePCGCooperativeKernel(const uint32_t state_size,
                              cudaMemcpyHostToDevice));
     }
 
-    cudaEvent_t start, stop;
-    cudaEventCreate(&start);
-    cudaEventCreate(&stop);
-    cudaEventRecord(start);
-
     void *pcg_kernel = (void *) pcg<T, STATE_SIZE, KNOT_POINTS>;
 
     // the following shall be turned off for speed
@@ -387,6 +382,11 @@ uint32_t solvePCGCooperativeKernel(const uint32_t state_size,
     #if DEBUG
       print_info_GPU(ppcg_kernel_smem_size, pcg_kernel, config);
     #endif
+
+    cudaEvent_t start, stop;
+    cudaEventCreate(&start);
+    cudaEventCreate(&stop);
+    cudaEventRecord(start);
 
     gpuErrchk(cudaLaunchCooperativeKernel(pcg_kernel, knot_points, pcg_constants::DEFAULT_BLOCK, kernelArgs,
                                           ppcg_kernel_smem_size));

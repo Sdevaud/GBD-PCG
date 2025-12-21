@@ -7,24 +7,65 @@
 #include <limits>
 using namespace std;
 
+void readArrayFromFile(uint32_t size, const char *filename,
+                       double *matrix) {
+  FILE *myFile;
+  myFile = fopen(filename, "r");
+  if (myFile == NULL) {
+    printf("Error Reading File\n");
+    exit(0);
+  }
+
+  for (uint32_t i = 0; i < size; i++) {
+    int ret = fscanf(myFile, "%lf,", &matrix[i]); // for double
+    if (ret != 1) {
+      fprintf(stderr, "Error reading at index %u\n", i);
+      exit(EXIT_FAILURE);
+    }
+  }
+
+  fclose(myFile);
+  return;
+}
+
+void readArrayFromFile(uint32_t size, const char *filename,
+                       float *matrix) {
+  FILE *myFile;
+  myFile = fopen(filename, "r");
+  if (myFile == NULL) {
+    printf("Error Reading File\n");
+    exit(0);
+  }
+
+  for (uint32_t i = 0; i < size; i++) {
+    int ret = fscanf(myFile, "%f,", &matrix[i]); // for float
+    if (ret != 1) {
+      fprintf(stderr, "Error reading at index %u\n", i);
+      exit(EXIT_FAILURE);
+    }
+  }
+
+  fclose(myFile);
+  return;
+}
+
+
 template<typename T>
-bool is_spd(const T* A, int N) {
-    // On fait une copie car le Cholesky modifie la matrice.
+void is_spd(const T* A, int N) {
+    bool test = true;
     T* L = new T[N * N];
     for (int i = 0; i < N * N; ++i)
         L[i] = A[i];
 
-    // -------- Test 1 : Symétrie --------
     for (int i = 0; i < N; ++i) {
         for (int j = i + 1; j < N; ++j) {
             if (std::abs(L[i*N + j] - L[j*N + i]) > 1e-6) {
                 delete[] L;
-                return false;
+                test = false;
             }
         }
     }
 
-    // -------- Test 2 : Décomposition de Cholesky --------
     for (int i = 0; i < N; ++i) {
         for (int j = 0; j <= i; ++j) {
             T sum = L[i*N + j];
@@ -35,7 +76,7 @@ bool is_spd(const T* A, int N) {
             if (i == j) {
                 if (sum <= (T)0) {
                     delete[] L;
-                    return false;   // pivot négatif : pas SPD
+                    test = false;
                 }
                 L[i*N + j] = std::sqrt(sum);
             } else {
@@ -45,7 +86,8 @@ bool is_spd(const T* A, int N) {
     }
 
     delete[] L;
-    return true;
+    if (test) std::cout << "SPD \n";
+    else std::cout << "no SPD \n";
 }
 
 
@@ -237,8 +279,10 @@ void error_computation(const T* h_S,
   T* h_S_x_h_lambda = (T*)calloc(Nnx, sizeof(T));
   mat_mul_vector(h_S, h_lambda, h_S_x_h_lambda, Nnx);
   for (uint32_t i = 0; i < Nnx; ++i) {
-    error += fabs(h_S_x_h_lambda[i] - h_gamma[i]);
+    error += pow(h_S_x_h_lambda[i] - h_gamma[i], 2);
   }
+
+  error = sqrt(error);
   
   free(h_S_x_h_lambda);
 }

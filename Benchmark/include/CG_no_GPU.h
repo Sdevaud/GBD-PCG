@@ -29,21 +29,21 @@ T compute_alpha(const T* A, const T* P, T* AP,
     if(k==0) alpha_num += r[i] * r[i];
   }
 
-
-  printf("alpha : %f \n", alpha_denom);
   return alpha_num / alpha_denom;
 }
 
 template<typename T>
 T compute_beta(const T* P, const T* AP, 
-  T* r, T* x, int size, T& alpha_num, T alpha) {
+  T* r, T* x, int size, T& alpha_num, T alpha, T& r_tot) {
 
   T old_alpha_num = alpha_num;
   alpha_num = 0.0;
+  r_tot = 0;
 
   for (int i = 0; i < size; ++i) {
     x[i] = x[i] + alpha * P[i];
     r[i] = r[i] + alpha * AP[i];
+    r_tot += std::abs(r[i]); 
     alpha_num += r[i] * r[i];
   }
 
@@ -51,14 +51,14 @@ T compute_beta(const T* P, const T* AP,
 }
 
 template<typename T>
-void compute_P(T* P, const T* r, T beta, int size, T tol){
+void compute_P(T* P, const T* r, T beta, int size){
   for(int i = 0; i < size; ++i) {
     P[i] = -r[i] + beta * P[i];
   }
 }
 
 template<typename T>
-void Conjugate_Gradien(const T* A, const T* b, T* x0, int state, int knot_point, uint32_t nbr_iteration, T tol = 1e-8) {
+void Conjugate_Gradien(const T* A, const T* b, T* x0, int state, int knot_point, uint32_t& nbr_iteration, T tol = 1e-8) {
   
   if (!A || !b || !x0) {
     std::cerr << "error: A, b or x0 is nullptr\n";
@@ -66,21 +66,25 @@ void Conjugate_Gradien(const T* A, const T* b, T* x0, int state, int knot_point,
   }
 
   int size = state * knot_point;
-  T* r  = new T[size];
-  T* P  = new T[size];
-  T* AP = new T[size];
+  T* r  = (T*) calloc(size, sizeof(T));
+  T* P  = (T*) calloc(size, sizeof(T));
+  T* AP = (T*) calloc(size, sizeof(T));
   initilisation(A, b, r, P, x0, size);
-  T alpha_num = 0.0, alpha = 0.0, beta = 0.0;
+  T alpha_num = 0.0, alpha = 0.0, beta = 0.0, r_tot = 0.0;
   
   for (uint32_t i = 0; i < nbr_iteration; ++i) {
     alpha = compute_alpha(A, P, AP, r, size, i, alpha_num);
-    beta = compute_beta (P, AP, r, x0, size, alpha_num, alpha);
-    compute_P(P, r, beta, size, tol);
+    beta = compute_beta (P, AP, r, x0, size, alpha_num, alpha, r_tot);
+    compute_P(P, r, beta, size);
+    if (r_tot < tol) {
+      nbr_iteration = i;
+      break;
+    }
   }
 
-  delete[] r;
-  delete[] P;
-  delete[] AP;
+  free(r);
+  free(P);
+  free(AP);
 
 }
 

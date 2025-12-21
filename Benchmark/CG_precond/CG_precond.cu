@@ -6,38 +6,49 @@
 #include "utils.h"
 
 template<typename T>
-void run_benchmark(uint32_t state_size, uint32_t knot_points, unsigned int random = 0, const uint32_t nbr_iteration = 10) {
-  const uint32_t Nnx = state_size * knot_points;
+void run_benchmark(uint32_t nx, uint32_t N, const uint32_t nbr_iteration) {
+  //-------- setup PCG  ---------
+  const uint32_t Nnx = nx * N;
+  const uint32_t size_h = 3*Nnx*nx;
   struct pcg_config<T> config;
   config.pcg_max_iter = nbr_iteration;
   config.pcg_org_trans = false;
-  config.pcg_poly_order = 0;
+  config.pcg_poly_order = 1;
+  config.pcg_poly_coeff[0] = 1.0;
 
-  // data generation
-  T* S = generate_spd_block_tridiagonal<T>(state_size, knot_points, random);
-  T* h_gamma = generate_random_vector<T>(Nnx, random);
+  //-------- data reading  ---------
+  T* h_S = (T*) calloc(size_h, sizeof(T));
+  T* h_gamma = (T*) calloc(Nnx, sizeof(T));
   T* h_lambda = (T*) calloc(Nnx, sizeof(T));
-  T* h_S = transform_matrix<T>(S, state_size, knot_points);
-  T* h_Pinv = formPolyPreconditioner_Pinv<T>(S, knot_points, state_size);
-  T *h_H = NULL;
-  
-  // time computation
+  T* h_H = (T*) calloc(size_h, sizeof(T));
+  T* h_Pinv = (T*) calloc(size_h, sizeof(T));
+  readArrayFromFile(Nnx, "../include/data/h_gamma.txt", h_gamma);
+  readArrayFromFile(size_h, "../include/data/h_S.txt", h_S);
+  readArrayFromFile(size_h, "../include/data/H.txt", h_H);
+  readArrayFromFile(size_h, "../include/data/P.txt", h_Pinv);
+  #if ERROR_DOUBLE or ERROR_FLOAT
+    T* S = (T*) calloc(Nnx*Nnx, sizeof(T));
+    readArrayFromFile(Nnx*Nnx, "../include/data/S.txt", S);
+  #endif
+
   float kernel_time_ms = 0;
   #if TIME_EXECUTION_DOUBLE or TIME_EXECUTION_FLOAT
     auto start = std::chrono::high_resolution_clock::now();
   #endif
 
-  uint32_t res = solvePCG<T>(h_S,
+  //-------- Compute PCG  ---------
+  uint32_t nbr_iter_resolving = solvePCG<T>(h_S,
                               h_Pinv,
                               h_H,
                               h_gamma,
                               h_lambda,
-                              state_size,
-                              knot_points,
+                              nx,
+                              N,
                               &config,
                               &kernel_time_ms);
 
-#if TIME_EXECUTION_DOUBLE or TIME_EXECUTION_FLOAT
+  //-------- print benchmark result  ---------
+  #if TIME_EXECUTION_DOUBLE or TIME_EXECUTION_FLOAT
     auto end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double, std::milli> exec_time = end - start;
     std::cout << exec_time.count() << std::endl;
@@ -45,26 +56,17 @@ void run_benchmark(uint32_t state_size, uint32_t knot_points, unsigned int rando
   #endif
 
   #if ERROR_DOUBLE or ERROR_FLOAT
+    std::cout << kernel_time_ms << std::endl;
+    std::cout << nbr_iter_resolving << std::endl;
     T error(0.0);
     error_computation<T>(S, h_gamma, h_lambda, Nnx, error);
     print_error(error);
-    std::cout << nbr_iteration << std::endl << kernel_time_ms << std::endl;
+    free(S);
   #endif
 
-  #if DEBUG
-    printMatrix("S", S, Nnx);
-    printVector("h_gamma", h_gamma, Nnx);
-    printVector("h_lambda", h_lambda, Nnx);
-    T* Axb = (T*)calloc(Nnx, sizeof(T));
-    mat_mul_vector(S, h_lambda, Axb, Nnx);
-    printVector("S x h_lambda", Axb, Nnx);
-    bool test = is_spd(S, Nnx);
-    if (test) std::cout << "SPD \n";
-    else std::cout << "no SPD \n";
-  #endif
-
-  free(S);
   free(h_S);
+  free(h_Pinv);
+  free(h_H);
   free(h_gamma);
   free(h_lambda);
 }
@@ -75,21 +77,13 @@ int main() {
   const uint32_t knot_points = KNOT_POINTS;
   const uint32_t nbr_iteration = NBR_ITERATION;
 
-  #if TIME_EXECUTION_DOUBLE
-    run_benchmark<double>(state_size, knot_points, 0, nbr_iteration);
+  #if TIME_EXECUTION_DOUBLE or ERROR_DOUBLE
+    run_benchmark<double>(state_size, knot_points, nbr_iteration);
   #endif
 
-  #if TIME_EXECUTION_FLOAT
-    run_benchmark<float>(state_size, knot_points, 0, nbr_iteration);
+  #if TIME_EXECUTION_FLOAT or ERROR_FLOAT
+    run_benchmark<float>(state_size, knot_points, nbr_iteration);
   #endif
-
-  #if ERROR_DOUBLE
-    run_benchmark<double>(state_size, knot_points, 5, nbr_iteration);
-  #endif
-
-  #if ERROR_FLOAT
-    run_benchmark<float>(state_size, knot_points, 5, nbr_iteration);
-  #endif 
 
   return 0;
 }

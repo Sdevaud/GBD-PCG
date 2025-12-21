@@ -4,11 +4,11 @@
 #include <cuda_runtime.h>
 
 #ifndef STATE_SIZE
-#define STATE_SIZE 29
+#define STATE_SIZE 12
 #endif
 
 #ifndef KNOT_POINTS
-#define KNOT_POINTS 11
+#define KNOT_POINTS 50
 #endif
 
 #ifndef PCG_TYPE
@@ -16,7 +16,7 @@
 #endif
 
 #ifndef PRECOND_POLY_ORDER
-#define PRECOND_POLY_ORDER false // now supports poly_order = 0, 1, 2, bigger number will not make a huge difference
+#define PRECOND_POLY_ORDER 1 // now supports poly_order = 0, 1, 2, bigger number will not make a huge difference
 #endif
 
 #ifndef CHOL_OR_LDL
@@ -24,7 +24,7 @@
 #endif
 
 #ifndef DEBUG
-#define DEBUG true
+#define DEBUG false
 #endif
 
 #ifndef OPTIMISED
@@ -48,16 +48,20 @@
 #endif
 
 #ifndef NBR_ITERATION
-#define NBR_ITERATION 10000
+#define NBR_ITERATION 100000
 #endif
 
 namespace pcg_constants
 {
-  uint32_t DEFAULT_MAX_PCG_ITER = 10000;
+  uint32_t DEFAULT_MAX_PCG_ITER = 100000;
   template <typename T>
   T DEFAULT_EPSILON = 1e-8;
   dim3 DEFAULT_GRID(KNOT_POINTS); // one SMBlock per knot point
-  dim3 DEFAULT_BLOCK(1024); // one thread per state variable
+  #if not OPTIMISED
+    dim3 DEFAULT_BLOCK(STATE_SIZE); // one thread per state variable
+  #else
+    dim3 DEFAULT_BLOCK(1024); // one warp per state variable
+  #endif
   int sizeSM = 0;
   int sizeBlockShared = 0;
 }

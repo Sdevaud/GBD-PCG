@@ -1,5 +1,5 @@
 import subprocess
-import numpy as np
+import Benchmark.numpy_method as np
 from scipy.stats import norm
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors

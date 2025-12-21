@@ -8,14 +8,12 @@
 #include "utils.h"
 #include "constant.h"
 
-
 template <typename T>
 Eigen::SparseMatrix<T> denseToSparse(const T* dense, uint32_t n)
 {
-    // Création en format LIL, + efficace pour remplir une sparse
     Eigen::SparseMatrix<T> A_sparse(n, n);
     std::vector<Eigen::Triplet<T>> triplets;
-    triplets.reserve(n * 10);  // estimation basse, ajustée ensuite
+    triplets.reserve(n * 10);
 
     for (uint32_t i = 0; i < n; i++) {
         for (uint32_t j = 0; j < n; j++) {
@@ -30,36 +28,39 @@ Eigen::SparseMatrix<T> denseToSparse(const T* dense, uint32_t n)
     return A_sparse;
 }
 
-
 template<typename T>
-void run_benchmark(uint32_t state_size, uint32_t knot_points) {
-    const uint32_t Nnx = state_size * knot_points;
+void run_benchmark(uint32_t nx, uint32_t N) {
+  const uint32_t Nnx = N * nx;
 
-    // Matrice full dense (remplie de zéros)
-    T* h_S = generate_spd_block_tridiagonal<T>(state_size, knot_points);
-    T* h_gamma = generate_random_vector<T>(Nnx);
+  //-------- data reading  ---------
+  T* S = (T*) calloc(Nnx*Nnx, sizeof(T));
+  T* h_gamma = (T*) calloc(Nnx, sizeof(T));
+  readArrayFromFile(Nnx*Nnx, "../include/data/S.txt", S);
+  readArrayFromFile(Nnx, "../include/data/h_gamma.txt", h_gamma);
 
-    // --- Conversion dense -> sparse ---
-    Eigen::SparseMatrix<T> A_sparse = denseToSparse(h_S, Nnx);
+  //-------- Convertion format  ---------
+  Eigen::SparseMatrix<T> A_sparse = denseToSparse<T>(S, Nnx);
+  Eigen::Map<Eigen::Matrix<T, Eigen::Dynamic, 1>> b(h_gamma, Nnx);
+  Eigen::SimplicialLDLT<Eigen::SparseMatrix<T>> solver;
 
-    // Vecteur RHS
-    Eigen::Map<Eigen::Matrix<T, Eigen::Dynamic, 1>> b(h_gamma, Nnx);
+  auto start = std::chrono::high_resolution_clock::now();
 
-    // Solveur SPD : SimplicialLDLT (le plus efficace)
-    Eigen::SimplicialLDLT<Eigen::SparseMatrix<T>> solver;
+  // -------- Eigen Solver  ---------
+  solver.compute(A_sparse);
+  Eigen::Matrix<T, Eigen::Dynamic, 1> x = solver.solve(b);
 
-    auto start = std::chrono::high_resolution_clock::now();
+  auto end = std::chrono::high_resolution_clock::now();
+  std::chrono::duration<T, std::milli> exec_time_ms = end - start;
+  std::cout << exec_time_ms.count() << std::endl;
 
-    solver.compute(A_sparse);
-    Eigen::Matrix<T, Eigen::Dynamic, 1> x = solver.solve(b);
+  #if ERROR_DOUBLE or ERROR_FLOAT
+    T error(0.0);
+    error_computation<T>(S, h_gamma, x.data(), Nnx, error);
+    print_error(error);
+  #endif
 
-    auto end = std::chrono::high_resolution_clock::now();
-
-    std::chrono::duration<T, std::milli> exec_time_ms = end - start;
-    std::cout << exec_time_ms.count() << std::endl;
-
-    free(h_S);
-    free(h_gamma);
+  free(S);
+  free(h_gamma);
 }
 
 int main() {
@@ -67,13 +68,12 @@ int main() {
   const uint32_t state_size = STATE_SIZE;
   const uint32_t knot_points = KNOT_POINTS;
 
-  #if TIME_EXECUTION_DOUBLE
+  #if TIME_EXECUTION_DOUBLE or ERROR_DOUBLE
     run_benchmark<double>(state_size, knot_points);
   #endif
 
-  #if TIME_EXECUTION_FLOAT
+  #if TIME_EXECUTION_FLOAT or ERROR_FLOAT
     run_benchmark<float>(state_size, knot_points);
   #endif
-
   return 0;
 }

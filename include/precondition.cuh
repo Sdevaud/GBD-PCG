@@ -39,16 +39,16 @@ bool checkPreconditionOccupancy(void *kernel, dim3 block, uint32_t state_size, u
         exit(5);
     }
 
-    int numProcs = deviceProp.multiProcessorCount;
+    // int numProcs = deviceProp.multiProcessorCount;
     int numBlocksPerSm;
     gpuErrchk(cudaOccupancyMaxActiveBlocksPerMultiprocessor(&numBlocksPerSm, kernel, block.x * block.y * block.z,
                                                             smem_size));
 
-    if ((int) knot_points > numProcs * numBlocksPerSm) {
-        printf("Too many knot points ([%d]). Device supports [%d] active blocks, over [%d] SMs.\n", knot_points,
-               numProcs * numBlocksPerSm, numProcs);
-        exit(6);
-    }
+    // if ((int) knot_points > numProcs * numBlocksPerSm) {
+    //     printf("Too many knot points ([%d]). Device supports [%d] active blocks, over [%d] SMs.\n", knot_points,
+    //            numProcs * numBlocksPerSm, numProcs);
+    //     exit(6);
+    // }
 
     return true;
 }

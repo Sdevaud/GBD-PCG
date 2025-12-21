@@ -1,7 +1,7 @@
 #pragma once
 
 #ifndef STATE_SIZE
-#define STATE_SIZE 30
+#define STATE_SIZE 12
 #endif
 
 #ifndef KNOT_POINTS
@@ -9,7 +9,7 @@
 #endif
 
 #ifndef DEBUG
-#define DEBUG true
+#define DEBUG false
 #endif
 
 #ifndef TIME_EXECUTION_DOUBLE
@@ -29,5 +29,5 @@
 #endif
 
 #ifndef NBR_ITERATION
-#define NBR_ITERATION 1
+#define NBR_ITERATION 100000
 #endif

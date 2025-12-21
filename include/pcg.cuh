@@ -65,7 +65,6 @@ bool checkPcgOccupancy(void *kernel, dim3 block, uint32_t state_size, uint32_t k
                        int poly_order) {
 
     const uint32_t smem_size = pcgSharedMemSize<T>(state_size, knot_points, org_trans, poly_order);
-    // printf("[PCG] shared memory per block in bytes = %d\n", smem_size);
     int dev = 0;
 
     // int maxBytes = 65536; // this is 64 KB, corresponding to compute capability 7.5 (GTX 1650)
@@ -390,9 +389,8 @@ void pcg(
         r_norm = pow(s_eta_new_b[0], 0.5);
 
         // check exit condition
-        if (r_norm < exit_tol) {
+        if (r_norm  < exit_tol) {
             iter++;
-            // printf("iter : %d \n", iter);
             max_iter_exit = false;
             break;
         }
