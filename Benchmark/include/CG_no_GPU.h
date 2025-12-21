@@ -21,7 +21,7 @@ T compute_alpha(const T* A, const T* P, T* AP,
   T  alpha_denom(0);
 
   for (int i = 0; i < size; ++i) {
-    AP[i] = 0;
+    AP[i] = 0.0;
     for (int j = 0; j < size; ++j) {
       alpha_denom += P[i] * A[i*size +j] * P[j];
       AP[i] += A[i*size +j] * P[j];
@@ -38,7 +38,7 @@ T compute_beta(const T* P, const T* AP,
 
   T old_alpha_num = alpha_num;
   alpha_num = 0.0;
-  r_tot = 0;
+  r_tot = 0.0;
 
   for (int i = 0; i < size; ++i) {
     x[i] = x[i] + alpha * P[i];

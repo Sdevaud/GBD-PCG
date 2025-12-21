@@ -29,7 +29,7 @@ void run_benchmark(uint32_t state_size, uint32_t knot_points, uint32_t& nbr_iter
   #if ERROR_DOUBLE or ERROR_FLOAT
     std::cout << nbr_iteration << std::endl;
     T error(0.0);
-    error_computation<T>(S, h_gamma, h_lambda, Nnx, error);
+    error_L2<T>(S, h_gamma, h_lambda, Nnx, error);
     print_error(error);
   #endif
 

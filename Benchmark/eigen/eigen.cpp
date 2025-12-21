@@ -55,7 +55,7 @@ void run_benchmark(uint32_t nx, uint32_t N) {
 
   #if ERROR_DOUBLE or ERROR_FLOAT
     T error(0.0);
-    error_computation<T>(S, h_gamma, x.data(), Nnx, error);
+    error_L2<T>(S, h_gamma, x.data(), Nnx, error);
     print_error(error);
   #endif
 

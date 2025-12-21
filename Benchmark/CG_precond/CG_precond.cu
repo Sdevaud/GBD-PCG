@@ -59,7 +59,7 @@ void run_benchmark(uint32_t nx, uint32_t N, const uint32_t nbr_iteration) {
     std::cout << kernel_time_ms << std::endl;
     std::cout << nbr_iter_resolving << std::endl;
     T error(0.0);
-    error_computation<T>(S, h_gamma, h_lambda, Nnx, error);
+    error_L2<T>(S, h_gamma, h_lambda, Nnx, error);
     print_error(error);
     free(S);
   #endif
