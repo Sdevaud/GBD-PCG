@@ -3,5 +3,6 @@
 *.json
 *.o
 examples/data/
+*.txt
 # Benchmark/plots
 # Benchmark/data
