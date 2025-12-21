@@ -11,32 +11,34 @@
 template <typename T>
 Eigen::SparseMatrix<T> denseToSparse(const T* dense, uint32_t n)
 {
-    Eigen::SparseMatrix<T> A_sparse(n, n);
-    std::vector<Eigen::Triplet<T>> triplets;
-    triplets.reserve(n * 10);
+  Eigen::SparseMatrix<T> A_sparse(n, n);
+  std::vector<Eigen::Triplet<T>> triplets;
+  triplets.reserve(n * 10);
 
-    for (uint32_t i = 0; i < n; i++) {
-        for (uint32_t j = 0; j < n; j++) {
-            T val = dense[i * n + j];
-            if (val != T(0)) {
-                triplets.emplace_back(i, j, val);
-            }
-        }
+  for (uint32_t i = 0; i < n; i++) {
+    for (uint32_t j = 0; j < n; j++) {
+      T val = dense[i * n + j];
+      if (val != T(0)) {
+        triplets.emplace_back(i, j, val);
+      }
     }
+  }
 
-    A_sparse.setFromTriplets(triplets.begin(), triplets.end());
-    return A_sparse;
+  A_sparse.setFromTriplets(triplets.begin(), triplets.end());
+  return A_sparse;
 }
 
 template<typename T>
-void run_benchmark(uint32_t nx, uint32_t N) {
+void run_benchmark(uint32_t nx, uint32_t N, const std::string& data_path) {
   const uint32_t Nnx = N * nx;
+  std::string S_path = data_path + "/S.txt";
+  std::string gamma_path = data_path + "/h_gamma.txt";
 
   //-------- data reading  ---------
   T* S = (T*) calloc(Nnx*Nnx, sizeof(T));
   T* h_gamma = (T*) calloc(Nnx, sizeof(T));
-  readArrayFromFile(Nnx*Nnx, "../include/data/S.txt", S);
-  readArrayFromFile(Nnx, "../include/data/h_gamma.txt", h_gamma);
+  readArrayFromFile(Nnx*Nnx, S_path.c_str(), S);
+  readArrayFromFile(Nnx, gamma_path.c_str(), h_gamma);
 
   //-------- Convertion format  ---------
   Eigen::SparseMatrix<T> A_sparse = denseToSparse<T>(S, Nnx);
@@ -67,13 +69,14 @@ int main() {
 
   const uint32_t state_size = STATE_SIZE;
   const uint32_t knot_points = KNOT_POINTS;
+  std::string data_path = "./include/data";  // default
 
   #if TIME_EXECUTION_DOUBLE or ERROR_DOUBLE
-    run_benchmark<double>(state_size, knot_points);
+    run_benchmark<double>(state_size, knot_points, data_path);
   #endif
 
   #if TIME_EXECUTION_FLOAT or ERROR_FLOAT
-    run_benchmark<float>(state_size, knot_points);
+    run_benchmark<float>(state_size, knot_points, data_path);
   #endif
   return 0;
 }

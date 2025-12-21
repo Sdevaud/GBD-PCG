@@ -1,11 +1,28 @@
 import subprocess
-import Benchmark.numpy_method as np
+import numpy as np
 from scipy.stats import norm
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 import os
 import json
 
+
+def run_generator(nx, N):
+    cmd = [
+        "python3",
+        "./include/generate_spd.py",
+        str(nx),
+        str(N),
+        str(1),
+        "./include/data"
+    ]
+
+    print(f"🛠️ Generating data: {' '.join(cmd)}")
+
+    subprocess.run(
+        cmd,
+        check=True
+    )
 
 def run_cmd(cmd):
     """
@@ -316,7 +333,7 @@ def compute_run(num_runs, state_sizes, methods, method_paths, knot_points):
 
             # Python workflow: no compile needed
             if exe_path.endswith(".py"):
-                cmd = f"python3 {exe_path} {state_size} {kp}"
+                cmd = f"python3 {exe_path} {state_size} {kp} {0}"
                 prepared_cmds[point_idx][method_idx] = cmd
                 continue
 
@@ -334,6 +351,10 @@ def compute_run(num_runs, state_sizes, methods, method_paths, knot_points):
                 compile_cmd = (
                     f"{compiler} --compiler-options -Wall -O3 -std=c++17 "
                     f"-DTIME_EXECUTION_DOUBLE=1 "
+                    f"-DTIME_EXECUTION_FLOAT=0 "
+                    f"-DERROR_DOUBLE=0 "
+                    f"-DERROR_FLOAT=0 "
+                    f"-DDEBUG=0 "
                     f"-DSTATE_SIZE={state_size} -DKNOT_POINTS={kp} "
                     f"-I../include -I../GLASS -I./include "
                     f"{cu_src} -o {exe_name}"
@@ -343,6 +364,10 @@ def compute_run(num_runs, state_sizes, methods, method_paths, knot_points):
                 compile_cmd = (
                     f"{compiler} -Wall -O3 -std=c++17 "
                     f"-DTIME_EXECUTION_DOUBLE=1 "
+                    f"-DTIME_EXECUTION_FLOAT=0 "
+                    f"-DERROR_DOUBLE=0 "
+                    f"-DERROR_FLOAT=0 "
+                    f"-DDEBUG=0 "
                     f"-DSTATE_SIZE={state_size} -DKNOT_POINTS={kp} "
                     f"-I./include -I.. "
                     f"-I/usr/include/eigen3 "
@@ -362,8 +387,9 @@ def compute_run(num_runs, state_sizes, methods, method_paths, knot_points):
         # ---- Now run all runs for this size ----
         for run_idx in range(num_runs):
             print(f"🧪 Run {run_idx + 1}/{num_runs}")
-
+            run_generator(state_size, kp)
             for method_idx, method_name in enumerate(methods):
+                
                 cmd = prepared_cmds[point_idx][method_idx]
 
                 print(f"▶️ Execution: {cmd}")
@@ -439,13 +465,10 @@ def save_data_plot(
 
 def benchmark():
     nbr_run = 5
-    # ATTENTION : vérifier que les clés de 'methods' correspondent bien
-    # aux clés de 'method_paths' dans ton repo final.
-    # Ici je laisse comme dans ton exemple original.
-    # methods = ["numpy", "eigen", "pcg_no_gpu", "pcg_no_precond", "pcg_precond"]
+    methods = ["numpy", "eigen", "pcg_no_gpu", "pcg_no_precond", "pcg_precond"]
     methods = ["numpy", "eigen", "pcg_no_precond", "pcg_precond"]
     method_paths = {
-        "numpy": "linlag.py",
+        "numpy": "numpy_method.py",
         "eigen": "./eigen/eigen.cpp",
         # "pcg_no_gpu": "./CG_no_GPU/CG_no_GPU.cpp",
         "pcg_no_precond": "./CG_no_precond/CG_no_precond.cu",
@@ -454,7 +477,7 @@ def benchmark():
 
     # first run states_sizes
     model_knot_point = [50]
-    model_states_sizes = [7 * i for i in range(1, 7)]
+    model_states_sizes = [7 * i for i in range(1, 6)]
     save_data_plot(nbr_run,
                    model_states_sizes,
                    methods,
@@ -530,5 +553,5 @@ def benchmark_only_plot():
 
 
 if __name__ == "__main__":
-    # benchmark()
-    benchmark_only_plot()
+    benchmark()
+    # benchmark_only_plot()

@@ -1,4 +1,4 @@
-import Benchmark.numpy_method as np
+import numpy as np
 import os
 from numpy.linalg import inv, qr
 import sys
@@ -145,41 +145,63 @@ def write_blk_pentadiag_to_file(D, O_up2, O_down2, N, nx, filename):
   np.savetxt(filename, out)
 
 if __name__ == "__main__":
+  # ---------- arguments ----------
+  if len(sys.argv) < 4 or len(sys.argv) > 5:
+    print("Usage: python3 generate_spd.py <nx> <N> <nu> [output_path]")
+    sys.exit(1)
+
   nx = int(sys.argv[1])
-  N = int(sys.argv[2])
+  N  = int(sys.argv[2])
   nu = int(sys.argv[3])
-  Nnx = N*nx
+  Nnx = N * nx
 
-  if not os.path.exists("data"):
-    os.mkdir("data")
+  # ---------- output path ----------
+  if len(sys.argv) == 5:
+    data_path = sys.argv[4]
   else:
-    for f in os.listdir("data"):
-      if f.startswith("I_H"):
-        os.remove(os.path.join("data", f))
+    data_path = "./data"
 
-  # generate random {A_k, B_k}
+  # ---------- create / clean directory ----------
+  os.makedirs(data_path, exist_ok=True)
+
+  for f in os.listdir(data_path):
+    if f.startswith("I_H"):
+      os.remove(os.path.join(data_path, f))
+
+  # ---------- generate random {A_k, B_k} ----------
   A = [np.random.rand(nx, nx) for _ in range(N)]
   B = [np.random.rand(nx, nu) for _ in range(N)]
   h_gamma = np.random.rand(Nnx)
 
   Q = []
   R = []
-  for i in range(N-1):
+  for i in range(N - 1):
     T = unitaryMatrix(nx)
     Q.append(T @ np.diag(np.random.rand(nx)) @ T.T)
     R.append(np.diag(np.random.rand(nu)))
+
   T = unitaryMatrix(nx)
   Q.append(T @ np.diag(np.random.rand(nx)) @ T.T)
 
+  # ---------- build matrices ----------
   D, O, S = formKKTSchur(A, B, Q, R, N)
-  writeBlkTriDiagSymMatrixToFile(D, O, N, nx, "./data/h_S.txt")
+  writeBlkTriDiagSymMatrixToFile(
+    D, O, N, nx, os.path.join(data_path, "h_S.txt")
+  )
 
   D_P, O_P, P = form_preconditioner_P(D, O, N, nx)
-  writeBlkTriDiagSymMatrixToFile(D_P, O_P, N, nx, "./data/P.txt") 
+  writeBlkTriDiagSymMatrixToFile(
+    D_P, O_P, N, nx, os.path.join(data_path, "P.txt")
+  )
 
   D_H, O_up2, O_down2, H = form_poly_preconditioner_H(D, O, N, nx)
-  write_blk_pentadiag_to_file(D_H, O_up2, O_down2, N, nx, "./data/H.txt")
+  write_blk_pentadiag_to_file(
+    D_H, O_up2, O_down2, N, nx, os.path.join(data_path, "H.txt")
+  )
 
-  np.savetxt("./data/S.txt", S)
-  np.savetxt("./data/h_gamma.txt", h_gamma)
+  # ---------- save data ----------
+  np.savetxt(os.path.join(data_path, "S.txt"), S)
+  np.savetxt(os.path.join(data_path, "h_gamma.txt"), h_gamma)
+
+  print(f"✅ Data generated in: {data_path}")
 

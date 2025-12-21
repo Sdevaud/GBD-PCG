@@ -28,7 +28,7 @@
 #endif
 
 #ifndef OPTIMISED
-#define OPTIMISED false
+#define OPTIMISED true
 #endif
 
 #ifndef TIME_EXECUTION_DOUBLE

@@ -21,7 +21,7 @@
 #endif
 
 #ifndef ERROR_DOUBLE
-#define ERROR_DOUBLE true
+#define ERROR_DOUBLE false
 #endif
 
 #ifndef ERROR_FLOAT
