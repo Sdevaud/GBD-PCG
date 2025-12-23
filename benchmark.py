@@ -127,7 +127,7 @@ def _normalize_points(state_sizes, knot_points):
         kp = kp * num_points
     return ss, kp
 
-def _defines_from_info(info, state_size, knot_points, method_name):
+def _defines_from_info(info, state_size, knot_points, method_name, NBR_ITERATION_MAX=100000):
     defs = []
     defs.append(f"-DSTATE_SIZE={state_size}")
     defs.append(f"-DKNOT_POINTS={knot_points}")
@@ -139,13 +139,14 @@ def _defines_from_info(info, state_size, knot_points, method_name):
         "STATExKERNEL", "KNOTxKERNEL",
         "STATExCOMPUTER", "KNOTxCOMPUTER",
         "STATExNBR_ITERATION", "KNOTxNBR_ITERATION",
-        "NBR_ITERATIONxERROR", "DOUBLE"
+        "NBR_ITERATIONxERROR", "DOUBLE",
     ]:
         val = int(getattr(info, name, 0))
         defs.append(f"-D{name}={val}")
 
     defs.append(f"-DOPTIMISED={int(is_optimised)}")
     defs.append(f'-DDATA_PATH=\\"{info.DATA_PATH}\\"')
+    defs.append(f"-DNBR_ITERATION_MAX={NBR_ITERATION_MAX}")
 
     return " ".join(defs)
 
@@ -228,11 +229,11 @@ def compute_run(info, generator_script="./include/generate_spd.py"):
     return results_x, results_y
 
 def compute_run_2(info, generator_script="./include/generate_spd.py"):
-    state_sizes, knot_points = _normalize_points(info.state_size, info.knot_point)
+    ss, kp = info.state_size[0], info.knot_point[0]
     methods = list(info.method_names)
     num_runs = int(info.nbr)
 
-    num_points = len(state_sizes)
+    num_points = len(info.NBR_RUN_ITERATION)
     num_methods = len(methods)
 
     results_x = [[[0.0 for _ in range(num_methods)] for _ in range(num_points)] for _ in range(num_runs)]
@@ -240,15 +241,14 @@ def compute_run_2(info, generator_script="./include/generate_spd.py"):
 
     prepared_cmds = [[None for _ in range(num_methods)] for _ in range(num_points)]
     executables_to_cleanup = []
+    run_generator(ss, kp, out_path=info.DATA_PATH, nu=1, script_path=generator_script)
 
     for point_idx in range(num_points):
-        ss = state_sizes[point_idx]
-        kp = knot_points[point_idx]
-        print(f"📏 Benchmarking state_size={ss}, kp={kp}")
+        print(f"📏 Benchmarking nbr_iter_max : {info.NBR_RUN_ITERATION[point_idx]}")
 
         for method_idx, method_name in enumerate(methods):
             src_path = info.method_path[method_name]
-            defines = _defines_from_info(info, ss, kp, method_name)
+            defines = _defines_from_info(info, ss, kp, method_name, NBR_ITERATION_MAX=info.NBR_RUN_ITERATION[point_idx])
 
             if src_path.endswith(".py"):
                 prepared_cmds[point_idx][method_idx] = f"python3 {src_path} {ss} {kp} {int(getattr(info, 'STATExKERNEL', 0))} {int(getattr(info, 'KNOTxKERNEL', 0))} {int(getattr(info, 'STATExCOMPUTER', 0))} {int(getattr(info, 'KNOTxCOMPUTER', 0))} "
@@ -269,7 +269,6 @@ def compute_run_2(info, generator_script="./include/generate_spd.py"):
 
         for run_idx in range(num_runs):
             print(f"🧪 Run {run_idx + 1}/{num_runs}")
-            run_generator(ss, kp, out_path=info.DATA_PATH, nu=1, script_path=generator_script)
 
             for method_idx, method_name in enumerate(methods):
                 cmd = prepared_cmds[point_idx][method_idx]
@@ -285,7 +284,10 @@ def compute_run_2(info, generator_script="./include/generate_spd.py"):
     return results_x, results_y
 
 def save_data_plot(info, generator_script="./include/generate_spd.py"):
-    results_x, results_y = compute_run(info, generator_script=generator_script)
+    if info.NBR_ITERATIONxERROR == 1:
+        results_x, results_y = compute_run_2(info, generator_script=generator_script)
+    else:
+        results_x, results_y = compute_run(info, generator_script=generator_script)
     filtered_x, filtered_y, avg_x, avg_y = eliminate_outliers_xy(results_x, results_y)
 
     data_dir = os.path.join(info.path_data)
@@ -353,7 +355,7 @@ class InfoBench:
     self.NBR_RUN_ITERATION = NBR_RUN_ITERATION
     self.DOUBLE = DOUBLE
 
-  def benchmark1(self):
+  def benchmark(self):
     save_data_plot(self)
 
 
@@ -379,7 +381,7 @@ if __name__ == "__main__":
       path_data = "datas/",
       STATExKERNEL = 1
   )
-  benchmark1.benchmark1()
+  # benchmark1.benchmark()
   
   # ------------ Second Benchmark ------------------
   benchmark2 = copy.deepcopy(benchmark1)
@@ -390,7 +392,7 @@ if __name__ == "__main__":
   benchmark2.x_label = "increase the horizon"
   benchmark2.STATExKERNEL = 0
   benchmark2.KNOTxKERNEL = 1
-  # benchmark2.benchmark1()
+  # benchmark2.benchmark()
 
   # ------------ third Benchmark ------------------
   benchmark3 = copy.deepcopy(benchmark1)
@@ -398,7 +400,7 @@ if __name__ == "__main__":
   benchmark3.title_plot = "Benchmark of the number of states with horizon = 50 (Total time)"
   benchmark3.STATExKERNEL = 0
   benchmark3.STATExCOMPUTER = 1
-  # benchmark3.benchmark1()
+  # benchmark3.benchmark()
 
   # ------------ fourth Benchmark ------------------
   benchmark4 = copy.deepcopy(benchmark2)
@@ -406,7 +408,7 @@ if __name__ == "__main__":
   benchmark4.title_plot = "Benchmark of the horizon with state size = 30 (Total time)"
   benchmark4.KNOTxKERNEL = 0
   benchmark4.KNOTxCOMPUTER = 1
-  # benchmark4.benchmark1()
+  # benchmark4.benchmark()
 
   # ------------ fifth Benchmark ------------------
   benchmark5 = copy.deepcopy(benchmark1)
@@ -420,7 +422,7 @@ if __name__ == "__main__":
   benchmark5.STATExKERNEL = 0
   benchmark5.STATExNBR_ITERATION = 1
   benchmark5.y_label = "number of iterations"
-  benchmark5.benchmark1()
+  # benchmark5.benchmark()
 
   # ------------ sixth Benchmark ------------------
   benchmark6 = copy.deepcopy(benchmark2)
@@ -434,26 +436,25 @@ if __name__ == "__main__":
   benchmark6.KNOTxKERNEL = 0
   benchmark6.KNOTxNBR_ITERATION = 1
   benchmark6.y_label = "number of iterations"
-  benchmark6.benchmark1()
+  # benchmark6.benchmark()
 
-  # # ------------ seventh Benchmark ------------------
-  # benchmark7 = InfoBench(
-  #   nbr_run = 25,
-  #   method_names = ["pcg_no_precond", "pcg_precond"],
-  #   method_path = {
-  #       "pcg_no_precond": "./CG_no_precond/CG_no_precond.cu",
-  #       "pcg_precond": "./CG_precond/CG_precond.cu"
-  #   },
-  #   state_size = [30],
-  #   knot_point = [100],
-  #   path_plot = "Benchmark/plots/",
-  #   folder_name_plot = "plots/",
-  #   file_name_plot = "errors_iterations",
-  #   title_plot = "Benchmark of the number of iterations vs error with state size = 30 and horizon = 100",
-  #   x_label = "number of iterations",
-  #   y_label = "error l2 norm",
-  #   path_data = "Benchmark/datas/",
-  #   folder_name_data = "nbr_iterations_x_error/",
-  #   NBR_ITERATIONxERROR = 1
-  # )
-  # benchmark7.benchmark()
+  # ------------ seventh Benchmark ------------------
+  benchmark7 = InfoBench(
+    nbr_run = 5,
+    method_names = ["yang_no_precond", "yang_precond"],
+    method_path = {
+            "yang_no_precond": "./src/yang/yang_no_precond.cu",
+            "yang_precond": "./src/yang/yang_precond.cu"
+    },
+    state_size = [30],
+    knot_point = [100],
+    path_plot = "plots/",
+    file_name_plot = "errors_iterations",
+    title_plot = "Benchmark of the number of iterations vs error with state size = 30 and horizon = 100",
+    x_label = "number of iterations",
+    y_label = "error l2 norm",
+    path_data = "datas/",
+    NBR_ITERATIONxERROR = 1,
+    NBR_RUN_ITERATION = [20, 50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 1000, 1200, 1400, 1600, 1800, 2000, 2500, 3000, 3500, 4000]
+  )
+  benchmark7.benchmark()

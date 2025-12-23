@@ -63,7 +63,7 @@
 #define OPTIMISED 0
 #endif
 
-#ifndef NBR_ITERATION
+#ifndef NBR_ITERATION_MAX
 #define NBR_ITERATION_MAX 100000
 #endif
 
