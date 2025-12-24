@@ -389,7 +389,7 @@ void pcg(
         r_norm = pow(s_eta_new_b[0], 0.5);
 
         // check exit condition
-        if (r_norm  < exit_tol) {
+        if (r_norm / gamma_norm < exit_tol) {
             iter++;
             max_iter_exit = false;
             break;

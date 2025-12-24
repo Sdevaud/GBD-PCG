@@ -45,7 +45,7 @@ void run_benchmark(uint32_t nx, uint32_t N, const std::string& data_path) {
   Eigen::Map<Eigen::Matrix<T, Eigen::Dynamic, 1>> h_gamma(gamma, Nnx);
   Eigen::SimplicialLDLT<Eigen::SparseMatrix<T>> solver;
 
-  #if STATExCOMPUTER or KNOTxCOMPUTER or STATExKERNEL or KNOTxKERNEL
+  #if STATExCOMPUTER or KNOTxCOMPUTER or STATExKERNEL or KNOTxKERNEL or KERNELxERROR
     auto start = std::chrono::high_resolution_clock::now();
   #endif
 
@@ -60,7 +60,7 @@ void run_benchmark(uint32_t nx, uint32_t N, const std::string& data_path) {
     printVector("h_gamma", h_gamma, Nnx, 2);
     printMatrix("S", S, Nnx, 2);
     T error(0.0);
-    error_L2<T>(S, h_gamma, h_lambda, Nnx, error);
+    error_L2<T>(S, gamma, h_lambda.data(), Nnx, error);
     print_error(error);
   #endif
 
@@ -76,6 +76,15 @@ void run_benchmark(uint32_t nx, uint32_t N, const std::string& data_path) {
     std::chrono::duration<double, std::milli> exec_time = end - start;
     std::cout << N << std::endl;
     std::cout << exec_time.count() << std::endl;
+  #endif
+
+  #if KERNELxERROR
+    auto end = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double, std::milli> exec_time = end - start;
+    T error(0.0);
+    error_L2<T>(S, gamma, h_lambda.data(), Nnx, error);
+    std::cout << exec_time.count() << std::endl;
+    print_error(error);
   #endif
 
   free(S);

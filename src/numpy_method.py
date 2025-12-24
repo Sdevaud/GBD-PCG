@@ -24,6 +24,7 @@ def main():
   KNOTxKERNEL = sys.argv[4].lower() in ("1", "true")
   STATExCOMPUTER = sys.argv[5].lower() in ("1", "true")
   KNOTxCOMPUTER = sys.argv[6].lower() in ("1", "true")
+  KERNELxERROR = sys.argv[7].lower() in ("1", "true")
   Nnx = N * nx
 
   # -------- data reading  ---------
@@ -46,9 +47,10 @@ def main():
     print(f"{N}")
     print(f"{exec_time_ms:.6f}")
 
-  if 0 < 1:
+  if KERNELxERROR:
     r = A @ x - b
     res_norm = np.linalg.norm(r)
+    print(f"{exec_time_ms:.6f}")
     print(res_norm)
 
 if __name__ == "__main__":

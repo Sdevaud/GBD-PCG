@@ -22,7 +22,7 @@ void run_benchmark(uint32_t state_size, uint32_t knot_points, const std::string&
   readArrayFromFile(Nnx*Nnx, S_path.c_str(), S);
   readArrayFromFile(Nnx, gamma_path.c_str(), h_gamma);
 
-  #if STATExCOMPUTER or KNOTxCOMPUTER or STATExKERNEL or KNOTxKERNEL
+  #if STATExCOMPUTER or KNOTxCOMPUTER or STATExKERNEL or KNOTxKERNEL or KERNELxERROR
     auto start = std::chrono::high_resolution_clock::now();
   #endif
 
@@ -44,14 +44,14 @@ void run_benchmark(uint32_t state_size, uint32_t knot_points, const std::string&
     auto end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double, std::milli> exec_time = end - start;
     std::cout << nx << std::endl;
-    std::cout << kernel_time_ms << std::endl;
+    std::cout << exec_time.count() << std::endl;
   #endif 
 
   #if KNOTxKERNEL or KNOTxCOMPUTER
     auto end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double, std::milli> exec_time = end - start;
     std::cout << N << std::endl;
-    std::cout << kernel_time_ms << std::endl;
+    std::cout << exec_time.count() << std::endl;
   #endif
 
   #if STATExNBR_ITERATION
@@ -68,6 +68,15 @@ void run_benchmark(uint32_t state_size, uint32_t knot_points, const std::string&
     T error(0.0);
     error_L2<T>(S, h_gamma, h_lambda, Nnx, error);
     std::cout << nbr_iter_resolving << std::endl;
+    print_error(error);
+  #endif
+
+  #if KERNELxERROR
+    auto end = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double, std::milli> exec_time = end - start;
+    T error(0.0);
+    error_L2<T>(S, h_gamma, h_lambda, Nnx, error);
+    std::cout << exec_time.count() << std::endl;
     print_error(error);
   #endif
 

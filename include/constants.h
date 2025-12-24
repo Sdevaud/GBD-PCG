@@ -55,6 +55,10 @@
 #define NBR_ITERATIONxERROR 0
 #endif
 
+#ifndef KERNELxERROR
+#define KERNELxERROR 0
+#endif
+
 #ifndef DOUBLE
 #define DOUBLE 1
 #endif
@@ -75,7 +79,7 @@ namespace pcg_constants
 {
   uint32_t DEFAULT_MAX_PCG_ITER = 100000;
   template <typename T>
-  T DEFAULT_EPSILON = 1e-8;
+  T DEFAULT_EPSILON = 1e-7;
   dim3 DEFAULT_GRID(KNOT_POINTS); // one SMBlock per knot point
   #if not OPTIMISED
     dim3 DEFAULT_BLOCK(STATE_SIZE); // one thread per state variable

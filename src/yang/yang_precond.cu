@@ -106,6 +106,13 @@ void run_benchmark(uint32_t nx, uint32_t N, const std::string& data_path) {
     print_error(error);
   #endif
 
+  #if KERNELxERROR
+    T error(0.0);
+    error_L2<T>(S, h_gamma, h_lambda, Nnx, error);
+    std::cout << kernel_time_ms << std::endl;
+    print_error(error);
+  #endif
+
   free(h_S);
   free(h_Pinv);
   free(h_H);
