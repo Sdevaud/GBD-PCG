@@ -6,7 +6,7 @@
 #include <cuda_runtime.h>
 #include "gpuassert.cuh"
 #include "types.cuh"
-#include "pcg.cuh"
+#include "pcg_yang.cuh"
 #include "precondition.cuh"
 
 template<typename T>
@@ -346,7 +346,7 @@ uint32_t solvePCGCooperativeKernel(const uint32_t state_size,
         gpuErrchk(cudaMemcpy(d_poly_coeff, config->pcg_poly_coeff, config->pcg_poly_order * sizeof(T),
                              cudaMemcpyHostToDevice));
     }
-
+    
     void *pcg_kernel = (void *) pcg<T, STATE_SIZE, KNOT_POINTS>;
 
     // the following shall be turned off for speed

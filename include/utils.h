@@ -5,50 +5,41 @@
 #include <ctime>
 #include <iomanip>
 #include <limits>
+#include <cstring>
 using namespace std;
 
 // ---------------- Function for READ from a .txt file ----------------
 
-void readArrayFromFile(uint32_t size, const char *filename,
-                       double *matrix) {
-  FILE *myFile;
-  myFile = fopen(filename, "r");
-  if (myFile == NULL) {
-    printf("Error Reading File\n");
-    exit(0);
-  }
+template<typename T>
+void readArrayFromFile(uint32_t size,
+                             const char* filename,
+                             T* matrix,
+                             uint32_t padding = 0)
+{
+    std::memset(matrix, 0, (size + 2 * padding) * sizeof(T));
 
-  for (uint32_t i = 0; i < size; i++) {
-    int ret = fscanf(myFile, "%lf,", &matrix[i]); // for double
-    if (ret != 1) {
-      fprintf(stderr, "Error reading at index %u\n", i);
-      exit(EXIT_FAILURE);
+    FILE* myFile = fopen(filename, "r");
+    if (!myFile) {
+        perror("Error opening file");
+        exit(EXIT_FAILURE);
     }
-  }
 
-  fclose(myFile);
-  return;
-}
+    for (uint32_t i = 0; i < size; i++) {
+        int ret;
+        if constexpr (std::is_same_v<T, double>)
+            ret = fscanf(myFile, "%lf,", &matrix[padding + i]);
+        else if constexpr (std::is_same_v<T, float>)
+            ret = fscanf(myFile, "%f,", &matrix[padding + i]);
+        else
+            static_assert(sizeof(T) == 0, "Unsupported type");
 
-void readArrayFromFile(uint32_t size, const char *filename,
-                       float *matrix) {
-  FILE *myFile;
-  myFile = fopen(filename, "r");
-  if (myFile == NULL) {
-    printf("Error Reading File\n");
-    exit(0);
-  }
-
-  for (uint32_t i = 0; i < size; i++) {
-    int ret = fscanf(myFile, "%f,", &matrix[i]); // for float
-    if (ret != 1) {
-      fprintf(stderr, "Error reading at index %u\n", i);
-      exit(EXIT_FAILURE);
+        if (ret != 1) {
+            fprintf(stderr, "Error reading at index %u\n", i);
+            exit(EXIT_FAILURE);
+        }
     }
-  }
 
-  fclose(myFile);
-  return;
+    fclose(myFile);
 }
 
 // ---------------- Mathematic Tool function ----------------
@@ -168,7 +159,7 @@ void printVector(string vector_name, const T* b, uint32_t size, int precision = 
   std::cout << vector_name << " : ";  
   std::cout << "[";
     for (uint32_t i = 0; i < size; i++) {
-        cout << fixed << setprecision(precision) << b[i];
+        std::cout << fixed << setprecision(precision) << b[i];
         if (i != size - 1) std::cout << ", ";
     }
     std::cout << "]" << std::endl;
@@ -184,6 +175,13 @@ void printMatrix(string matrix_name, const T* A, uint32_t size, int precision = 
           if (j != size - 1) std::cout << ", ";
       }
       std::cout << "]" << std::endl;
+  }
+}
+
+template<typename T>
+void TransformPadding(const T* vector_padding, T* vector, const uint32_t padding, const uint32_t size) {
+  for (uint32_t i = padding; i < size+padding; ++i) {
+    vector[i-padding] = vector_padding[i];
   }
 }
 

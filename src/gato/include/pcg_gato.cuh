@@ -4,10 +4,12 @@
 #include "constants.h"
 #include "cuda.cuh"
 #include "linalg.cuh"
+#include "utils.h"
 
 using namespace sqp;
 using namespace gato;
 using namespace gato::constants;
+
 
 template<typename T, uint32_t BatchSize>
 __global__ __launch_bounds__(PCG_THREADS) void solvePCGBatchedKernel(
@@ -19,8 +21,7 @@ __global__ __launch_bounds__(PCG_THREADS) void solvePCGBatchedKernel(
                                                                     uint32_t&                    d_iterations)
 {
         const uint32_t solve_idx = blockIdx.x;
-        const T abs_tol = 1e-6;
-
+        const T abs_tol = 1e-8;
 
         // ----- Shared Memory -----
         // 5 vectors + 32 + 4
@@ -39,9 +40,7 @@ __global__ __launch_bounds__(PCG_THREADS) void solvePCGBatchedKernel(
 
         // scalars
         __shared__ T s_rho, s_rho_new, s_alpha, s_beta, s_rho_init;
-
         uint32_t iterations = 0;
-
         __syncthreads();
 
         // get A, M_inv, b, x pointers for current batch

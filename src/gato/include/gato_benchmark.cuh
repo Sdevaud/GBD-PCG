@@ -4,7 +4,7 @@
 #include <cuda_runtime.h>
 #include "constants.h"
 #include "cuda.cuh"
-#include "pcg.cuh"
+#include "pcg_gato.cuh"
 
 
 template<typename T, uint32_t BatchSize>
@@ -13,7 +13,7 @@ void solver_PCG_GATO(
                       const T* S_batch, 
                       const T* P_inv_batch, 
                       const T* gamma_batch, 
-                      const uint32_t Nnx, 
+                      const uint32_t size_matrix_h,
                       const uint32_t max_pcg_iters, 
                       uint32_t& d_iterations,
                       float* kernel_time_ms) {
@@ -23,15 +23,15 @@ void solver_PCG_GATO(
   T* d_P_inv_batch = nullptr;
   T* d_gamma_batch = nullptr;
 
-  gpuErrchk(cudaMalloc(&d_lambda_batch, Nnx * sizeof(T)));
-  gpuErrchk(cudaMalloc(&d_S_batch, Nnx * Nnx * sizeof(T)));
-  gpuErrchk(cudaMalloc(&d_P_inv_batch, Nnx * sizeof(T)));
-  gpuErrchk(cudaMalloc(&d_gamma_batch, Nnx * Nnx * sizeof(T)));
+  gpuErrchk(cudaMalloc(&d_lambda_batch, VEC_SIZE_PADDED * sizeof(T)));
+  gpuErrchk(cudaMalloc(&d_gamma_batch, VEC_SIZE_PADDED * sizeof(T)));
+  gpuErrchk(cudaMalloc(&d_S_batch, size_matrix_h * sizeof(T)));
+  gpuErrchk(cudaMalloc(&d_P_inv_batch, size_matrix_h * sizeof(T)));
 
-  gpuErrchk(cudaMemcpy(d_S_batch, S_batch, Nnx * Nnx * sizeof(T), cudaMemcpyHostToDevice));
-  gpuErrchk(cudaMemcpy(d_P_inv_batch, P_inv_batch, Nnx * sizeof(T), cudaMemcpyHostToDevice));
-  gpuErrchk(cudaMemcpy(d_gamma_batch, gamma_batch, Nnx * Nnx * sizeof(T), cudaMemcpyHostToDevice));
-  gpuErrchk(cudaMemset(d_lambda_batch, 0, Nnx * sizeof(T)));
+  gpuErrchk(cudaMemset(d_lambda_batch, 0, VEC_SIZE_PADDED * sizeof(T)));
+  gpuErrchk(cudaMemcpy(d_gamma_batch, gamma_batch, VEC_SIZE_PADDED * sizeof(T), cudaMemcpyHostToDevice));
+  gpuErrchk(cudaMemcpy(d_S_batch, S_batch, size_matrix_h * sizeof(T), cudaMemcpyHostToDevice));
+  gpuErrchk(cudaMemcpy(d_P_inv_batch, P_inv_batch, size_matrix_h * sizeof(T), cudaMemcpyHostToDevice));
 
   cudaEvent_t start, stop;
   gpuErrchk(cudaEventCreate(&start));
@@ -54,7 +54,7 @@ void solver_PCG_GATO(
   gpuErrchk(cudaEventDestroy(start));
   gpuErrchk(cudaEventDestroy(stop));
 
-  gpuErrchk(cudaMemcpy(lambda_batch, d_lambda_batch, Nnx * sizeof(T), cudaMemcpyDeviceToHost));
+  gpuErrchk(cudaMemcpy(lambda_batch, d_lambda_batch, VEC_SIZE_PADDED * sizeof(T), cudaMemcpyDeviceToHost));
 
   gpuErrchk(cudaFree(d_lambda_batch));
   gpuErrchk(cudaFree(d_S_batch));

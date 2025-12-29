@@ -5,6 +5,20 @@ import sys
 
 np.set_printoptions(precision=16, suppress=True)
 
+"""
+Génère une matrice bloc-tridiagonale symétrique définie positive (SPD)
+de taille (state * horizon) × (state * horizon).
+
+Structure :
+    [ D1   O1^T   0      ...       0     ]
+    [ O1    D2    O2^T   ...       0     ]
+    [ 0     O2    D3     ...       0     ]
+    [ ...   ...   ...     ...     On-1^T ]
+    [ 0     0     0      On-1     Dn    ]
+
+Où chaque bloc Dk, Ok ∈ R^(state × state).
+"""
+
 def unitaryMatrix(n):
   X = np.random.rand(n, n) / np.sqrt(2)
   Q, R = qr(X)
@@ -39,7 +53,7 @@ def formKKTSchur(A, B, Q, R, N):
   return D, O, S
 
 
-def writeBlkTriDiagSymMatrixToFile(D, O, N, nx, filename):
+def writeBlkTriDiagSymMatrixToFile_bloc(D, O, N, nx, filename):
   out = np.zeros((N*3, nx*nx))
   out[1, :] = D[0].reshape(-1)
   out[2, :] = O[0].T.reshape(-1)
@@ -52,6 +66,23 @@ def writeBlkTriDiagSymMatrixToFile(D, O, N, nx, filename):
 
   out[-3, :] = O[N-2].reshape(-1)
   out[-2, :] = D[N-1].reshape(-1)
+
+  np.savetxt(filename, out)
+
+def writeBlkTriDiagSymMatrixToFile_line(D, O, N, nx, filename):
+
+  out = np.zeros((N * nx, 3 * nx))
+
+  for i in range(N):
+    for j in range(nx): 
+      row_idx = i * nx + j
+      if i > 0:
+        out[row_idx, 0:nx] = O[i-1].T[j, :]
+
+      out[row_idx, nx:2*nx] = D[i][j, :]
+
+      if i < N - 1:
+        out[row_idx, 2*nx:3*nx] = O[i][j, :]
 
   np.savetxt(filename, out)
 
@@ -185,13 +216,21 @@ if __name__ == "__main__":
 
   # ---------- build matrices ----------
   D, O, S = formKKTSchur(A, B, Q, R, N)
-  writeBlkTriDiagSymMatrixToFile(
+  writeBlkTriDiagSymMatrixToFile_bloc(
     D, O, N, nx, os.path.join(data_path, "h_S.txt")
   )
 
+  writeBlkTriDiagSymMatrixToFile_line(
+    D, O, N, nx, os.path.join(data_path, "h_S_line.txt")
+  )
+
   D_P, O_P, P = form_preconditioner_P(D, O, N, nx)
-  writeBlkTriDiagSymMatrixToFile(
+  writeBlkTriDiagSymMatrixToFile_bloc(
     D_P, O_P, N, nx, os.path.join(data_path, "P.txt")
+  )
+
+  writeBlkTriDiagSymMatrixToFile_line(
+    D_P, O_P, N, nx, os.path.join(data_path, "P_line.txt")
   )
 
   D_H, O_up2, O_down2, H = form_poly_preconditioner_H(D, O, N, nx)

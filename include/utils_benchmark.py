@@ -34,8 +34,8 @@ def gauss_filter_xy(xs, ys):
     sigma = float(np.std(ys))
     if sigma == 0.0:
         return list(xs), list(ys), float(np.mean(xs)), mu
-    lo = norm.ppf(0.025, loc=mu, scale=sigma)
-    hi = norm.ppf(0.975, loc=mu, scale=sigma)
+    lo = norm.ppf(0.1, loc=mu, scale=sigma)
+    hi = norm.ppf(0.9, loc=mu, scale=sigma)
     fx, fy = [], []
     for x, y in zip(xs, ys):
         if lo <= y <= hi:
@@ -45,7 +45,7 @@ def gauss_filter_xy(xs, ys):
         return [], [], None, None
     return fx, fy, float(np.mean(fx)), float(np.mean(fy))
 
-def eliminate_outliers_xy(results_x, results_y):
+def eliminate_outliers_xy(results_x, results_y, enable_stop_on_drop=False):
     nbr_run = len(results_x)
     nbr_points = len(results_x[0])
     nbr_methods = len(results_x[0][0])
@@ -65,36 +65,100 @@ def eliminate_outliers_xy(results_x, results_y):
             avg_x[i][j] = mx
             avg_y[i][j] = my
 
+    if enable_stop_on_drop:
+      for j in range(nbr_methods):
+        prev = None
+        stop = False
+        for i in range(nbr_points):
+          curr = avg_y[i][j]
+
+          if stop or curr is None or prev is None:
+            if stop:
+              avg_x[i][j] = None
+              avg_y[i][j] = None
+              filtered_x[i][j] = []
+              filtered_y[i][j] = []
+            prev = curr if curr is not None else prev
+            continue
+
+          if curr < (1.0 - 0.3) * prev:
+            stop = True
+            avg_x[i][j] = None
+            avg_y[i][j] = None
+            filtered_x[i][j] = []
+            filtered_y[i][j] = []
+          else:
+            prev = curr
+
     return filtered_x, filtered_y, avg_x, avg_y
 
-def plot_filtered_results_xy(filtered_x, filtered_y, avg_x, avg_y, method_names,
-                             file_name, save_path, plot_only_means=False,
-                             x_label="x", y_label="y", title="Benchmark"):
+def plot_filtered_results_xy(
+    filtered_x,
+    filtered_y,
+    avg_x,
+    avg_y,
+    method_names,
+    file_name,
+    save_path,
+    plot_only_means=False,
+    x_label="x",
+    y_label="y",
+    title="Benchmark",
+    ay_right=False
+):
     colors = plt.cm.tab10.colors
     num_methods = len(method_names)
 
-    plt.figure(figsize=(12, 6))
+    plt.figure(figsize=(6, 8))
 
     for j in range(num_methods):
-        ax = [avg_x[i][j] for i in range(len(avg_x)) if avg_x[i][j] is not None and avg_y[i][j] is not None]
-        ay = [avg_y[i][j] for i in range(len(avg_y)) if avg_x[i][j] is not None and avg_y[i][j] is not None]
-        if len(ax) == 0:
+        xs = []
+        ys = []
+        for i in range(len(avg_x)):
+            if avg_x[i][j] is not None and avg_y[i][j] is not None:
+                xs.append(avg_x[i][j])
+                ys.append(avg_y[i][j])
+
+        if len(xs) == 0:
             continue
-        plt.plot(ax, ay, label=method_names[j], color=colors[j % len(colors)], marker="s", linewidth=2)
+
+        plt.plot(
+            xs,
+            ys,
+            label=method_names[j],
+            color=colors[j % len(colors)],
+            marker="s",
+            linewidth=2
+        )
+
         if not plot_only_means:
             for i in range(len(filtered_x)):
                 for x, y in zip(filtered_x[i][j], filtered_y[i][j]):
-                    plt.scatter(x, y, color=colors[j % len(colors)], marker="x", alpha=0.6)
+                    plt.scatter(
+                        x,
+                        y,
+                        color=colors[j % len(colors)],
+                        marker="x",
+                        alpha=0.6
+                    )
 
     plt.xlabel(x_label)
     plt.ylabel(y_label)
     plt.title(title)
-    plt.legend(title="Method")
+
+    ax = plt.gca()
+
+    if ay_right:
+        ax.yaxis.tick_right()
+        ax.yaxis.set_label_position("right")
+
+    plt.legend(title="Method", fontsize=8)
     plt.grid(True, which="both", ls="--", alpha=0.5)
+
     plt.tight_layout()
 
     os.makedirs(os.path.dirname(save_path), exist_ok=True)
-    plt.savefig(save_path, dpi=300)
+    plt.savefig(save_path, dpi=300, bbox_inches="tight")
     plt.close()
 
 def write_data_xy(filtered_x, filtered_y, avg_x, avg_y, methods, output_dir, file_name):
@@ -152,7 +216,7 @@ def _defines_from_info(info, state_size, knot_points, method_name, NBR_ITERATION
     return " ".join(defs)
 
 def _compile_method(exe_path, exe_out, defines, extra_includes_cpp="-I./include -I/usr/include/eigen3",
-                    extra_includes_cu="-I./include -I./src/yang/include"):
+                    extra_includes_cu="-I./include -I./src/yang/include -I./src/gato/include"):
     method_dir = os.path.dirname(exe_path)
     method_base = os.path.splitext(os.path.basename(exe_path))[0]
     cu_src = os.path.join(method_dir, f"{method_base}.cu")
@@ -196,7 +260,7 @@ def compute_run(info, generator_script="./include/generate_spd.py"):
             defines = _defines_from_info(info, ss, kp, method_name)
 
             if src_path.endswith(".py"):
-                prepared_cmds[point_idx][method_idx] = f"python3 {src_path} {ss} {kp} {int(getattr(info, 'STATExKERNEL', 0))} {int(getattr(info, 'KNOTxKERNEL', 0))} {int(getattr(info, 'STATExCOMPUTER', 0))} {int(getattr(info, 'KNOTxCOMPUTER', 0))} "
+                prepared_cmds[point_idx][method_idx] = f"python3 {src_path} {ss} {kp} {int(getattr(info, 'STATExKERNEL', 0))} {int(getattr(info, 'KNOTxKERNEL', 0))} {int(getattr(info, 'STATExCOMPUTER', 0))} {int(getattr(info, 'KNOTxCOMPUTER', 0))} {int(getattr(info, 'KERNELxERROR', 0))}"
                 continue
 
             method_dir = os.path.dirname(src_path)
@@ -290,7 +354,7 @@ def save_data_plot(info, generator_script="./include/generate_spd.py"):
     else:
       results_x, results_y = compute_run(info, generator_script=generator_script)
       plot_only_means = False
-    filtered_x, filtered_y, avg_x, avg_y = eliminate_outliers_xy(results_x, results_y)
+    filtered_x, filtered_y, avg_x, avg_y = eliminate_outliers_xy(results_x, results_y, info.enable_stop_on_drop)
 
     data_dir = os.path.join(info.path_data)
     json_path = write_data_xy(filtered_x, filtered_y, avg_x, avg_y, list(info.method_names), data_dir, info.file_name_plot)
@@ -306,7 +370,8 @@ def save_data_plot(info, generator_script="./include/generate_spd.py"):
         x_label=info.x_label,
         y_label=info.y_label,
         title=info.title_plot,
-        plot_only_means=plot_only_means
+        plot_only_means=plot_only_means,
+        ay_right=info.ay_right
     )
 
 def only_plot(info):
@@ -314,7 +379,6 @@ def only_plot(info):
     plot_only_means = True
   else:
     plot_only_means = False
-
   
   json_path = os.path.join(os.path.join(info.path_data), f"{info.file_name_plot}.json")
   fx, fy, ax, ay, methods = read_data_xy(json_path)
@@ -327,7 +391,8 @@ def only_plot(info):
       x_label=info.x_label,
       y_label=info.y_label,
       title=info.title_plot,
-      plot_only_means=plot_only_means
+      plot_only_means=plot_only_means,
+      ay_right=info.ay_right
       )
 
 class InfoBench:
@@ -343,6 +408,8 @@ class InfoBench:
                x_label,
                y_label,
                path_data,
+               ay_right=False,
+               enable_stop_on_drop=False,
                STATExKERNEL=0,
                KNOTxKERNEL=0,
                STATExCOMPUTER=0,
@@ -367,6 +434,8 @@ class InfoBench:
     self.x_label = x_label
     self.y_label = y_label
     self.path_data = path_data
+    self.ay_right = ay_right
+    self.enable_stop_on_drop = enable_stop_on_drop
     self.STATExKERNEL = STATExKERNEL
     self.KNOTxKERNEL = KNOTxKERNEL
     self.STATExCOMPUTER = STATExCOMPUTER
@@ -384,6 +453,9 @@ class InfoBench:
   def benchmark(self):
     save_data_plot(self)
 
+  def only_plot(self):
+    only_plot(self)
+
 
 def create_benchmark(nbr_run_for_variance):
   list_of_benchmarks = []
@@ -391,32 +463,34 @@ def create_benchmark(nbr_run_for_variance):
   # ------------ First Benchmark ------------------
   benchmark1 = InfoBench(
       nbr_run = nbr_run_for_variance,
-      method_names = ["numpy", "eigen", "yang_no_precond", "yang_precond", "yang_precond_optimised"],
+      method_names = ["numpy", "eigen", "yang_no_precond", "yang_precond", "yang_precond_optimised", "gato"],
       method_path = {
           "numpy": "./src/numpy_method.py",
           "eigen": "./src/eigen/eigen.cpp",
           "yang_no_precond": "./src/yang/yang_no_precond.cu",
           "yang_precond": "./src/yang/yang_precond.cu",
-          "yang_precond_optimised": "./src/yang/yang_precond.cu"
+          "yang_precond_optimised": "./src/yang/yang_precond.cu",
+          "gato":"./src/gato/gato.cu"
       },
       state_size = [7 * i for i in range(1, 6)],
-      knot_point = [50],
+      knot_point = [40],
       path_plot = "plots/",
       file_name_plot = "state_kernel",
-      title_plot = "States size vs Kernel Execution Time (only inside the GPU), horizon size = 50",
+      title_plot = "States size vs Kernel Execution Time, horizon size = 40",
       x_label = "increase the number of states",
       y_label = "Execution time [ms]",
       path_data = "datas/",
-      STATExKERNEL = 1
+      STATExKERNEL = 1,
+      enable_stop_on_drop=True
   )
   list_of_benchmarks.append(benchmark1)
   
   # ------------ Second Benchmark ------------------
   benchmark2 = copy.deepcopy(benchmark1)
-  benchmark2.state_size = [28]
+  benchmark2.state_size = [21]
   benchmark2.knot_point = [15 * i for i in range(1, 7)]
   benchmark2.file_name_plot = "horizon_kernel"
-  benchmark2.title_plot = "Horizon vs Kernel Execution Time (only inside the GPU), state size = 28"
+  benchmark2.title_plot = "Horizon vs Kernel Execution Time, state size = 21"
   benchmark2.x_label = "increase the number of Knot Points (horizon)"
   benchmark2.STATExKERNEL = 0
   benchmark2.KNOTxKERNEL = 1
@@ -425,7 +499,7 @@ def create_benchmark(nbr_run_for_variance):
   # ------------ third Benchmark ------------------
   benchmark3 = copy.deepcopy(benchmark1)
   benchmark3.file_name_plot = "state_computer"
-  benchmark3.title_plot = "States size vs Total Execution Time (with transfert of host and device), horizon size = 50"
+  benchmark3.title_plot = "States size vs Total Execution Time, horizon size = 40"
   benchmark3.STATExKERNEL = 0
   benchmark3.STATExCOMPUTER = 1
   list_of_benchmarks.append(benchmark3)
@@ -433,20 +507,23 @@ def create_benchmark(nbr_run_for_variance):
   # ------------ fourth Benchmark ------------------
   benchmark4 = copy.deepcopy(benchmark2)
   benchmark4.file_name_plot = "horizon_computer"
-  benchmark4.title_plot = "Horizon vs Total Execution Time (with transfert of host and device), state size = 28"
+  benchmark4.title_plot = "Horizon vs Total Execution Time, state size = 21"
   benchmark4.KNOTxKERNEL = 0
   benchmark4.KNOTxCOMPUTER = 1
+  benchmark4.ay_right = True
   list_of_benchmarks.append(benchmark4)
 
   # ------------ fifth Benchmark ------------------
   benchmark5 = copy.deepcopy(benchmark1)
-  benchmark5.method_names = ["yang_no_precond", "yang_precond"]
+  benchmark5.method_names = ["yang_no_precond", "yang_precond", "gato"]
   benchmark5.method_path = {
           "yang_no_precond": "./src/yang/yang_no_precond.cu",
-          "yang_precond": "./src/yang/yang_precond.cu"
+          "yang_precond": "./src/yang/yang_precond.cu",
+          "gato":"./src/gato/gato.cu"
   }
   benchmark5.file_name_plot = "state_nbr_iteration"
-  benchmark5.title_plot = "State vs Number of Iterations, Horizon = 50"
+  benchmark5.title_plot = "State vs Number of Iterations, Horizon = 40"
+  benchmark5.ay_right = True
   benchmark5.STATExKERNEL = 0
   benchmark5.STATExNBR_ITERATION = 1
   benchmark5.y_label = "number of iterations"
@@ -457,7 +534,8 @@ def create_benchmark(nbr_run_for_variance):
   benchmark6.file_name_plot = "horizon_nbr_iteration"
   benchmark6.method_names = benchmark5.method_names
   benchmark6.method_path = benchmark5.method_path
-  benchmark6.title_plot = "Horizon vs Number of Iterations, state size = 30"
+  benchmark6.title_plot = "Horizon vs Number of Iterations, state size = 21"
+  benchmark6.ay_right = True
   benchmark6.KNOTxKERNEL = 0
   benchmark6.KNOTxNBR_ITERATION = 1
   benchmark6.y_label = "number of iterations"
@@ -469,15 +547,16 @@ def create_benchmark(nbr_run_for_variance):
     method_names = benchmark5.method_names,
     method_path = benchmark5.method_path,
     state_size = [21],
-    knot_point = [50],
+    knot_point = [40],
     path_plot = "plots/",
-    file_name_plot = "errors_iterations_21_50",
-    title_plot = "Number of iterations vs error state size = 21 and horizon = 50 maximum iteration = 1050",
+    file_name_plot = "errors_iterations_21_40",
+    title_plot = "Number of iterations vs error : nx = 21,  N = 40,  max_iter = 840",
     x_label = "number of iterations",
     y_label = "error L2 norm",
     path_data = "datas/",
+    ay_right = True,
     NBR_ITERATIONxERROR = 1,
-    NBR_RUN_ITERATION = [0, 25, 50, 100, 150, 200, 250, 300, 350, 400, 450, 500, 550, 600, 800, 1000]
+    NBR_RUN_ITERATION = [0, 25, 50, 100, 150, 200, 250, 300, 350, 400, 450, 500, 550, 600]
   )
   list_of_benchmarks.append(benchmark7)
 
@@ -486,8 +565,9 @@ def create_benchmark(nbr_run_for_variance):
   benchmark8.state_size = [30]
   benchmark8.knot_point = [90]
   benchmark8.file_name_plot = "errors_iterations_30_90"
-  benchmark8.title_plot = "Number of iterations vs error state size = 30 and horizon = 90 maximum iteration = 2700"
-  benchmark8.NBR_RUN_ITERATION = [0, 50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 1000, 1200, 1400, 1600, 1800, 2000, 2200, 2400, 2600, 2800, 3000, 3500, 4000]
+  benchmark8.title_plot = "Number of iterations vs error : nx = 30, N = 90 max_iter = 2700"
+  benchmark8.ay_right = True
+  benchmark8.NBR_RUN_ITERATION = [0, 50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 1000, 1200, 1400, 1600, 1800, 2000, 2200, 2400, 2600, 2800, 3000]
   list_of_benchmarks.append(benchmark8)
 
   # ------------ ninth Benchmark ------------------
@@ -497,10 +577,11 @@ def create_benchmark(nbr_run_for_variance):
       "numpy": "./src/numpy_method.py",
       "eigen": "./src/eigen/eigen.cpp",
       "yang_no_precond": "./src/yang/yang_no_precond.cu",
-      "yang_precond": "./src/yang/yang_precond.cu",
+      "yang_precond": "./src/yang/yang_precond.cu"
   }
-  benchmark9.file_name_plot = "errors_kernel_21_50"
-  benchmark9.title_plot = "Kernel time vs error state size = 21 and horizon = 50 maximum iteration = 1050"
+  benchmark9.file_name_plot = "errors_kernel_21_40"
+  benchmark9.title_plot = "Kernel time vs error : nx = 21,  N = 40,  max_iter = 840"
+  benchmark9.ay_right = False
   benchmark9.NBR_ITERATIONxERROR = 0
   benchmark9.KERNELxERROR = 1
   benchmark9.x_label = "Kernel Execution Time [ms]"
@@ -511,10 +592,42 @@ def create_benchmark(nbr_run_for_variance):
   benchmark10.method_names = benchmark9.method_names
   benchmark10.method_path = benchmark9.method_path
   benchmark10.file_name_plot = "errors_kernel_30_90"
-  benchmark10.title_plot = "Kernel time vs error state size = 30 and horizon = 90 maximum iteration = 2700"
+  benchmark10.title_plot = "Kernel time vs error : nx = 30, N = 90 max_iter = 2700"
+  benchmark10.ay_right = False
   benchmark10.NBR_ITERATIONxERROR = 0
   benchmark10.KERNELxERROR = 1
   benchmark10.x_label = benchmark9.x_label
   list_of_benchmarks.append(benchmark10)
+
+  # ------------ eleventh Benchmark ------------------
+  benchmark11 = InfoBench(
+    nbr_run = benchmark1.nbr_run,
+    method_names = benchmark5.method_names,
+    method_path = benchmark5.method_path,
+    state_size = [9],
+    knot_point = [16],
+    path_plot = "plots/",
+    file_name_plot = "errors_iterations_9_16",
+    title_plot = "Number of iterations vs error : nx = 9, N = 16 max_iter = 144",
+    x_label = "number of iterations",
+    y_label = "error L2 norm",
+    path_data = "datas/",
+    ay_right = True,
+    NBR_ITERATIONxERROR = 1,
+    NBR_RUN_ITERATION = [0, 12, 24, 36, 48, 60, 72, 84, 96, 108, 120, 144]
+  )
+  list_of_benchmarks.append(benchmark11)
+
+  # ------------ twelveth Benchmark ------------------
+  benchmark12 = copy.deepcopy(benchmark11)
+  benchmark12.method_names = benchmark9.method_names
+  benchmark12.method_path = benchmark9.method_path
+  benchmark12.file_name_plot = "errors_kernel_9_16"
+  benchmark12.title_plot = "Kernel time vs error : nx = 9, N = 16 max_iter = 144"
+  benchmark12.ay_right = False
+  benchmark12.NBR_ITERATIONxERROR = 0
+  benchmark12.KERNELxERROR = 1
+  benchmark12.x_label = benchmark9.x_label
+  list_of_benchmarks.append(benchmark12)
 
   return list_of_benchmarks

@@ -1,115 +1,137 @@
-# 🧮 Benchmark — Solvers for Ax = b
+# Benchmarking Solvers for Block-Tridiagonal SPD Linear Systems
 
-This repository provides several methods to solve the linear system:
+## Overview
 
-[
+This repository presents a systematic benchmark of numerical methods for solving large-scale **symmetric positive definite (SPD) linear systems** of the form:
+
+```
 A x = b
-]
-
-and compares their **execution times** across various problem sizes and solver implementations.
-
-## ⚙️ Implemented Methods
-
-Each method is located in the `Benchmark/` directory and can be run individually or through the main `benchmark.py` script.
-
-| Method              | Description                                                                                           |
-| :------------------ | :---------------------------------------------------------------------------------------------------- |
-| **`linlag.py`**     | Solves the system using NumPy’s built-in linear algebra solver (`numpy.linalg.solve`).                |
-| **`Gauss_Jordan`**  | Solves the problem using the **Gauss–Jordan elimination** method implemented in C with pointers.      |
-| **`CG_no_GPU`**     | Implements the **Conjugate Gradient** method *without preconditioner*, in pure C (CPU only).          |
-| **`CG_no_precond`** | Uses **CUDA parallelism** (GPU) to accelerate the Conjugate Gradient method without a preconditioner. |
-| **`CG`**            | Solves the problem on GPU using the **preconditioned Conjugate Gradient** method.                     |
-
-## 🧩 Matrix Definition
-
-The matrix **A** is semi-positive definite and block-tridiagonal, defined as:
-
-A = [
-  D₁      O₁           0        0        0
-  O₁ᵀ     D₂      O₂           0        0
-   0      O₂ᵀ     D₃      O₃           0
-   0       0      O₃ᵀ     D₄      O₄
-   0       0       0      O₄ᵀ     D₅
-]
-
-where **Dₖ** and **Oₖ** are square blocks in ℝⁿˣⁿ.
-
-
-## 📊 Benchmark 1 — Varying Model Size
-
-In the first benchmark, the time horizon is kept constant (**30**),
-and the number of model states increases from **1 to 51** in steps of **10**.
-
-Example plot:
-
-```
-(insert the correct image path here)
 ```
 
-## 📈 Benchmark 2 — Varying Horizon Length
-
-In the second benchmark, the number of model states is fixed (**30**),
-and the time horizon increases from **1 to 101** in steps of **20**.
-
-Example plot:
+where the matrix `A` has a **block-tridiagonal structure**.
+Such systems commonly arise in optimal control, trajectory optimization, and model predictive control (MPC). `A` has this form : 
 
 ```
-(insert the correct image path here)
+| D1   O1^T   0      ...       0     |
+| O1    D2    O2^T   ...       0     |
+| 0     O2    D3     ...       0     |
+| ...   ...   ...     ...     On-1^T |
+| 0     0     0      On-1     Dn     |
 ```
 
-## Installation
+Where:
 
-Make sure you are using **Python ≥ 3.8**.
+* `Dk` are diagonal blocks of size `(state × state)`
+* `Ok` are off-diagonal coupling blocks of size `(state × state)`
+* all `Dk` are symmetric positive definite
 
-Install the required dependencies:
+The right-hand side vector `b` is generated consistently with this structure.
+
+The benchmark compares CPU-based and GPU-based solvers.
+
+---
+
+## 1. Software and Hardware Requirements
+
+### Hardware
+* NVIDIA GPU
+  * Compute Capability ≥ 7.0
+  * Large shared-memory support
+* x86_64 CPU
+
+### Software
+* Linux (tested on Ubuntu)
+* `nvcc` and CUDA Toolkit ≥ 12.0
+* `g++` (C++17)
+* Python ≥ 3.8
+
+### Python Dependencies
+
+```txt
+numpy>=1.23
+scipy>=1.9
+matplotlib>=3.6
+```
+
+Install with:
 
 ```bash
-pip install numpy scipy matplotlib
+pip install -r requirements.txt
 ```
 
-or with **conda**:
+---
 
-```bash
-conda install numpy scipy matplotlib
-```
 
-If you want to run CUDA-based benchmarks, install **CUDA Toolkit ≥ 11.8** and ensure `nvcc` is available:
+## 2. Evaluated Methods
 
-```bash
-nvcc --version
-```
+### CPU Solvers
 
-You will also need a **CUDA-capable GPU** supporting the kernels used in `<checkPcgOccupancy>`.
+* **NumPy**
+  * Sparse Chollesky solver using `numpy.linalg.solve`
+* **Eigen**
+  * Sparse Cholesky solver using `Eigen`
 
-Examples of compatible GPUs include:
+### GPU Direct Solver
 
-* NVIDIA RTX 3060 / 3070 / 3080 / 3090
-* NVIDIA A100
-* NVIDIA Tesla V100 / T4
-  *(complete this list depending on your hardware)*
+* **cuDSS (Cholesky)**
 
-## 🚀 Usage
+  * GPU-accelerated sparse Cholesky factorization
 
-To run the benchmark:
+### GPU Iterative Solvers (PCG)
+
+* **Yang – PCG without preconditioning**
+* **Yang – PCG with block preconditioner**
+* **Yang – Optimized preconditioned PCG**
+  * try my own improvment
+* **Gato – PCG with block preconditioner**
+
+All PCG solvers solve the same linear system
+
+---
+
+## 3. Benchmark Suite
+
+The benchmark consists of **ten experiments** and we run it each 50 times for avoid the extreme result:
+
+1. State size vs GPU kernel execution time
+2. Horizon size vs GPU kernel execution time
+3. State size vs total execution time (host + device)
+4. Horizon size vs total execution time (host + device)
+5. State size vs number of PCG iterations
+6. Horizon size vs number of PCG iterations
+7. Iterations vs L2 error (state = 21, horizon = 40)
+8. Iterations vs L2 error (state = 30, horizon = 90)
+9. Kernel time vs error (state = 21, horizon = 40)
+10. Kernel time vs error (state = 30, horizon = 90)
+
+Each experiment is repeated multiple times, and statistical outliers are filtered before averaging.
+
+---
+
+## 4. Running the Benchmarks
+
+Run the complete benchmark suite with:
 
 ```bash
 python3 benchmark.py
 ```
 
-All benchmark data will be saved in the `data/` directory (as JSON files),
-and plots will be automatically generated in the `plots/` directory.
+This script:
 
-You can later regenerate plots without rerunning simulations:
+1. Generates SPD block-tridiagonal matrices
+2. Compiles each solver with problem-specific parameters
+3. Executes all benchmarks
+4. Stores results in `datas/`
+5. Generates plots in `plots/`
 
-```bash
-python3 replot.py
+---
+
+## 5. Report
+
+A detailed discussion of methodology and results is available in the accompanying report:
+
 ```
-
-## 🧾 Notes
-
-* Plots are automatically saved in the `plots/` directory.
-* Benchmark data is stored in `data/` (JSON format).
-* You can reload the saved data using the `read_data()` function without re-running the computations.
-* The code is fully portable — relative paths are automatically handled.
+[Link to report]
+```
 
 ---

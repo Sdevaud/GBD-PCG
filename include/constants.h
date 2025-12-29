@@ -4,11 +4,11 @@
 #include <cuda_runtime.h>
 
 #ifndef STATE_SIZE
-#define STATE_SIZE 3
+#define STATE_SIZE 21
 #endif
 
 #ifndef KNOT_POINTS
-#define KNOT_POINTS 4
+#define KNOT_POINTS 45
 #endif
 
 #ifndef PCG_TYPE
@@ -56,7 +56,7 @@
 #endif
 
 #ifndef KERNELxERROR
-#define KERNELxERROR 0
+#define KERNELxERROR 1
 #endif
 
 #ifndef DOUBLE
@@ -68,7 +68,7 @@
 #endif
 
 #ifndef NBR_ITERATION_MAX
-#define NBR_ITERATION_MAX 100000
+#define NBR_ITERATION_MAX 1000000
 #endif
 
 #ifndef DATA_PATH
@@ -95,7 +95,7 @@ namespace constants {
     constexpr uint32_t STATE_SIZE_SQ = STATE_SIZE * STATE_SIZE;
     constexpr uint32_t STATE_SQ_P_KNOTS = STATE_SIZE * STATE_SIZE * KNOT_POINTS; // Q, A
     constexpr uint32_t STATE_P_KNOTS = STATE_SIZE * KNOT_POINTS; // q, c
-    constexpr uint32_t VEC_SIZE_PADDED = (KNOT_POINTS + 2) * STATE_SIZE; // gamma
+    constexpr uint32_t VEC_SIZE_PADDED = (KNOT_POINTS+2) * STATE_SIZE; // gamma
     constexpr uint32_t BLOCK_ROW_R_DIM = 3 * STATE_SIZE;
     constexpr uint32_t BLOCK_ROW_SIZE = 3 * STATE_SIZE * STATE_SIZE;
     constexpr uint32_t B3D_MATRIX_SIZE_PADDED = 3 * STATE_SIZE * STATE_SIZE * KNOT_POINTS; // S, P_inv
