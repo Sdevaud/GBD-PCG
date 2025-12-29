@@ -106,12 +106,26 @@ def plot_filtered_results_xy(
     title="Benchmark",
     ay_right=False
 ):
-    colors = plt.cm.tab10.colors
-    num_methods = len(method_names)
+    list_color_name = ["numpy", "eigen", "yang_no_precond", "yang_precond", "yang_precond_optimised", "gato"]
+
+    palette = list(plt.cm.tab10.colors)
+
+    color_map = {}
+    used_colors = 0
+
+    for name in list_color_name:
+        if used_colors < len(palette):
+            color_map[name] = palette[used_colors]
+            used_colors += 1
+
+    for name in method_names:
+        if name not in color_map:
+            color_map[name] = palette[used_colors % len(palette)]
+            used_colors += 1
 
     plt.figure(figsize=(6, 8))
 
-    for j in range(num_methods):
+    for j, method in enumerate(method_names):
         xs = []
         ys = []
         for i in range(len(avg_x)):
@@ -122,11 +136,13 @@ def plot_filtered_results_xy(
         if len(xs) == 0:
             continue
 
+        c = color_map[method]
+
         plt.plot(
             xs,
             ys,
-            label=method_names[j],
-            color=colors[j % len(colors)],
+            label=method,
+            color=c,
             marker="s",
             linewidth=2
         )
@@ -137,7 +153,7 @@ def plot_filtered_results_xy(
                     plt.scatter(
                         x,
                         y,
-                        color=colors[j % len(colors)],
+                        color=c,
                         marker="x",
                         alpha=0.6
                     )
@@ -476,7 +492,7 @@ def create_benchmark(nbr_run_for_variance):
       knot_point = [40],
       path_plot = "plots/",
       file_name_plot = "state_kernel",
-      title_plot = "States size vs Kernel Execution Time, horizon size = 40",
+      title_plot = "States size vs Kernel Execution Time, N = 40",
       x_label = "increase the number of states",
       y_label = "Execution time [ms]",
       path_data = "datas/",
@@ -490,7 +506,7 @@ def create_benchmark(nbr_run_for_variance):
   benchmark2.state_size = [21]
   benchmark2.knot_point = [15 * i for i in range(1, 7)]
   benchmark2.file_name_plot = "horizon_kernel"
-  benchmark2.title_plot = "Horizon vs Kernel Execution Time, state size = 21"
+  benchmark2.title_plot = "Knot Point vs Kernel Execution Time, nx = 21"
   benchmark2.x_label = "increase the number of Knot Points (horizon)"
   benchmark2.STATExKERNEL = 0
   benchmark2.KNOTxKERNEL = 1
@@ -499,7 +515,7 @@ def create_benchmark(nbr_run_for_variance):
   # ------------ third Benchmark ------------------
   benchmark3 = copy.deepcopy(benchmark1)
   benchmark3.file_name_plot = "state_computer"
-  benchmark3.title_plot = "States size vs Total Execution Time, horizon size = 40"
+  benchmark3.title_plot = "States size vs Total Execution Time, N = 40"
   benchmark3.STATExKERNEL = 0
   benchmark3.STATExCOMPUTER = 1
   list_of_benchmarks.append(benchmark3)
@@ -507,7 +523,7 @@ def create_benchmark(nbr_run_for_variance):
   # ------------ fourth Benchmark ------------------
   benchmark4 = copy.deepcopy(benchmark2)
   benchmark4.file_name_plot = "horizon_computer"
-  benchmark4.title_plot = "Horizon vs Total Execution Time, state size = 21"
+  benchmark4.title_plot = "Knot Point vs Total Execution Time, nx = 21"
   benchmark4.KNOTxKERNEL = 0
   benchmark4.KNOTxCOMPUTER = 1
   benchmark4.ay_right = True
@@ -522,7 +538,7 @@ def create_benchmark(nbr_run_for_variance):
           "gato":"./src/gato/gato.cu"
   }
   benchmark5.file_name_plot = "state_nbr_iteration"
-  benchmark5.title_plot = "State vs Number of Iterations, Horizon = 40"
+  benchmark5.title_plot = "State vs Number of Iterations, N = 40"
   benchmark5.ay_right = True
   benchmark5.STATExKERNEL = 0
   benchmark5.STATExNBR_ITERATION = 1
@@ -534,7 +550,7 @@ def create_benchmark(nbr_run_for_variance):
   benchmark6.file_name_plot = "horizon_nbr_iteration"
   benchmark6.method_names = benchmark5.method_names
   benchmark6.method_path = benchmark5.method_path
-  benchmark6.title_plot = "Horizon vs Number of Iterations, state size = 21"
+  benchmark6.title_plot = "Knot Point vs Number of Iterations, nx = 21"
   benchmark6.ay_right = True
   benchmark6.KNOTxKERNEL = 0
   benchmark6.KNOTxNBR_ITERATION = 1
