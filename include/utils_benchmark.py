@@ -7,6 +7,33 @@ import matplotlib.colors as mcolors
 import os
 import json
 
+def plot_SharedMemory():
+  x = [2*i for i in range(1, 20)]
+
+  y_64_no = [3 * i * i / 128 for i in x]
+  y_64_pre = [3 * 3 * i * i / 128 for i in x]
+  y_32_no = [3 * i * i / 256 for i in x]
+  y_32_pre = [3 * 3 * i * i / 256 for i in x]
+
+  plt.figure(figsize=(6, 4))
+
+  plt.plot(x, y_64_no, marker="x", label="64-bit no precond")
+  plt.plot(x, y_64_pre, marker="x", label="64-bit precond")
+  plt.plot(x, y_32_no, marker="o", label="32-bit no precond")
+  plt.plot(x, y_32_pre, marker="o", label="32-bit precond")
+
+  plt.axhline(96, color="red", linestyle="--", linewidth=2, label="Shared memory limit (96 KB)")
+
+  plt.xlabel("state size")
+  plt.ylabel("KB")
+  plt.title("Shared memory size vs number of state")
+  plt.legend()
+  plt.grid(True, linestyle="--", alpha=0.5)
+  plt.tight_layout()
+  os.makedirs(os.path.dirname("./plots/Shared_memroy"), exist_ok=True)
+  plt.savefig("./plots/Shared_memroy", dpi=300, bbox_inches="tight")
+  plt.close()
+
 def run_generator(nx, N, out_path="./include/data", nu=1, script_path="./include/generate_spd.py"):
     cmd = ["python3", script_path, str(nx), str(N), str(nu), str(out_path)]
     print(f"🛠️ Generating data: {' '.join(cmd)}")
