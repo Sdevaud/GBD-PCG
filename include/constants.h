@@ -4,11 +4,11 @@
 #include <cuda_runtime.h>
 
 #ifndef STATE_SIZE
-#define STATE_SIZE 21
+#define STATE_SIZE 32
 #endif
 
 #ifndef KNOT_POINTS
-#define KNOT_POINTS 45
+#define KNOT_POINTS 32
 #endif
 
 #ifndef PCG_TYPE
@@ -64,7 +64,7 @@
 #endif
 
 #ifndef OPTIMISED
-#define OPTIMISED 0
+#define OPTIMISED 1
 #endif
 
 #ifndef NBR_ITERATION_MAX
