@@ -494,7 +494,7 @@ void write_result_txt(const std::vector<std::vector<T>>& result, const char* fil
     FILE* f = std::fopen(filename, "w");
     if (!f) { std::perror("fopen"); return; }
 
-    std::fprintf(f, "# Columns: B_DIM, shmemKB_rowSimple, cycles_row, cycles_row_shfl, cycles_col, cycles_col_shfl\n");
+    std::fprintf(f, "# Columns: state_Size, shared_memory_size kB, ms_row, ms_row_shfl, ms_col, ms_col_shfl\n");
     const size_t n = result[0].size();
     for (size_t i = 0; i < n; ++i) {
         std::fprintf(f, "%.0f %.9f %.9f %.9f %.9f %.9f\n",

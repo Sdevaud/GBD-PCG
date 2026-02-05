@@ -6,6 +6,71 @@ import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 import os
 import json
+from pathlib import Path
+
+def load_data(path: Path) -> np.ndarray:
+    if not path.exists():
+        raise FileNotFoundError(f"Input file not found: {path}")
+    # loadtxt ignores lines starting with '#'
+    data = np.loadtxt(path, comments="#")
+    if data.ndim == 1:
+        data = data.reshape(1, -1)
+    if data.shape[1] != 6:
+        raise ValueError(f"Expected 6 columns, got {data.shape[1]} columns.")
+    return data
+
+
+def plot_shuffle() -> None:
+    input_file = "./src/test/results.txt"
+    output_file = "./plots/float_shuffle.png"
+    fig_width = 12
+    fig_height = 5
+    dpi = 200
+
+    # Columns:
+    # state_Size, shared_memory_size_kB, ms_row, ms_row_shfl, ms_col, ms_col_shfl
+    data = np.loadtxt(input_file)
+
+    state_size = data[:, 0].astype(int)
+    shared_mem = data[:, 1]
+
+    ms_row = data[:, 2]
+    ms_row_shfl = data[:, 3]
+    ms_col = data[:, 4]
+    ms_col_shfl = data[:, 5]
+
+    # X positions (evenly spaced), labels carry both values
+    x = np.arange(len(state_size))
+
+    plt.figure(figsize=(fig_width, fig_height))
+
+    # Line plots
+    plt.plot(x, ms_row, marker="o", label="row")
+    plt.plot(x, ms_row_shfl, marker="s", label="row + shuffle")
+    plt.plot(x, ms_col, marker="^", label="col")
+    plt.plot(x, ms_col_shfl, marker="D", label="col + shuffle")
+
+    # Show only a subset of x-ticks, but include BOTH values on those ticks
+    step = max(1, len(x) // 6)  # ~6 labels max
+    tick_idx = np.arange(0, len(x), step)
+
+    tick_labels = [
+        f"{state_size[i]}\n({shared_mem[i]:.3f} kB)"
+        for i in tick_idx
+    ]
+
+    plt.xticks(tick_idx, tick_labels)
+
+    plt.xlabel("state_Size (shared_memory_size)")
+    plt.ylabel("Time (ms)")
+    plt.grid(axis="y", linestyle="--")
+    plt.legend()
+
+    plt.tight_layout()
+    plt.savefig(output_file, dpi=dpi)
+    plt.show()
+
+
 
 def plot_SharedMemory():
   x = [2*i for i in range(1, 20)]
